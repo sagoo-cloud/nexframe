@@ -9,30 +9,28 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"github.com/pkg/errors"
+	"github.com/sagoo-cloud/nexframe/errkit"
 	"os"
-
-	gerror "errors"
 )
 
 // GenerateKeyPair 生成RSA密钥对
 func GenerateKeyPair(bits int, privateKeyFile string, publicKeyFile string) (err error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
-		err = gerror.New("生成RSA密钥对时发生错误")
+		err = errkit.New("生成RSA密钥对时发生错误")
 		return
 	}
 
 	err = SavePrivateKeyToFile(privateKey, privateKeyFile)
 	if err != nil {
-		err = gerror.New("保存私钥文件时发生错误")
+		err = errkit.New("保存私钥文件时发生错误")
 		return
 	}
 
 	publicKey := &privateKey.PublicKey
 	err = SavePublicKeyToFile(publicKey, publicKeyFile)
 	if err != nil {
-		err = gerror.New("保存公钥文件时发生错误")
+		err = errkit.New("保存公钥文件时发生错误")
 		return
 	}
 
@@ -43,19 +41,19 @@ func GenerateKeyPair(bits int, privateKeyFile string, publicKeyFile string) (err
 func EncryptPKCS1v15(publicKeyFile string, content string) (ciphertext string, err error) {
 	publicKeyBytes, err := os.ReadFile(publicKeyFile)
 	if err != nil {
-		err = gerror.New("读取公钥文件时发生错误:" + err.Error())
+		err = errkit.New("读取公钥文件时发生错误:" + err.Error())
 		return
 	}
 
 	publicKey, err := ParsePublicKeyFromPEM(publicKeyBytes)
 	if err != nil {
-		err = gerror.New("解析公钥时发生错误:" + err.Error())
+		err = errkit.New("解析公钥时发生错误:" + err.Error())
 		return
 	}
 
 	ciphertextBytes, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, []byte(content))
 	if err != nil {
-		err = gerror.New("加密数据时发生错误:" + err.Error())
+		err = errkit.New("加密数据时发生错误:" + err.Error())
 		return
 	}
 	ciphertext = base64.StdEncoding.EncodeToString(ciphertextBytes)
@@ -66,13 +64,13 @@ func EncryptPKCS1v15(publicKeyFile string, content string) (ciphertext string, e
 func DecryptPKCS1v15(privateKeyFile, ciphertext string) (plaintext string, err error) {
 	privateKeyBytes, err := os.ReadFile(privateKeyFile)
 	if err != nil {
-		err = gerror.New("读取私钥文件时发生错误:" + err.Error())
+		err = errkit.New("读取私钥文件时发生错误:" + err.Error())
 		return
 	}
 
 	privateKey, err := ParsePrivateKeyFromPEM(privateKeyBytes)
 	if err != nil {
-		err = gerror.New("解析私钥时发生错误:" + err.Error())
+		err = errkit.New("解析私钥时发生错误:" + err.Error())
 		return
 	}
 	ciphertextBytes, err := base64.StdEncoding.DecodeString(ciphertext)
@@ -81,7 +79,7 @@ func DecryptPKCS1v15(privateKeyFile, ciphertext string) (plaintext string, err e
 	}
 	plaintextBytes, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, ciphertextBytes)
 	if err != nil {
-		err = gerror.New("解密数据时发生错误:" + err.Error())
+		err = errkit.New("解密数据时发生错误:" + err.Error())
 		return
 	}
 	plaintext = string(plaintextBytes)
@@ -92,19 +90,19 @@ func DecryptPKCS1v15(privateKeyFile, ciphertext string) (plaintext string, err e
 func EncryptOAEP(publicKeyFile string, content string) (ciphertext string, err error) {
 	publicKeyBytes, err := os.ReadFile(publicKeyFile)
 	if err != nil {
-		err = gerror.New("读取公钥文件时发生错误:" + err.Error())
+		err = errkit.New("读取公钥文件时发生错误:" + err.Error())
 		return
 	}
 
 	publicKey, err := ParsePublicKeyFromPEM(publicKeyBytes)
 	if err != nil {
-		err = gerror.New("解析公钥时发生错误:" + err.Error())
+		err = errkit.New("解析公钥时发生错误:" + err.Error())
 		return
 	}
 
 	ciphertextBytes, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, []byte(content), nil)
 	if err != nil {
-		err = gerror.New("加密数据时发生错误:" + err.Error())
+		err = errkit.New("加密数据时发生错误:" + err.Error())
 		return
 	}
 	ciphertext = base64.StdEncoding.EncodeToString(ciphertextBytes)
@@ -115,13 +113,13 @@ func EncryptOAEP(publicKeyFile string, content string) (ciphertext string, err e
 func DecryptOAEP(privateKeyFile, ciphertext string) (plaintext string, err error) {
 	privateKeyBytes, err := os.ReadFile(privateKeyFile)
 	if err != nil {
-		err = gerror.New("读取私钥文件时发生错误:" + err.Error())
+		err = errkit.New("读取私钥文件时发生错误:" + err.Error())
 		return
 	}
 
 	privateKey, err := ParsePrivateKeyFromPEM(privateKeyBytes)
 	if err != nil {
-		err = gerror.New("解析私钥时发生错误:" + err.Error())
+		err = errkit.New("解析私钥时发生错误:" + err.Error())
 		return
 	}
 	ciphertextBytes, err := base64.StdEncoding.DecodeString(ciphertext)
@@ -130,7 +128,7 @@ func DecryptOAEP(privateKeyFile, ciphertext string) (plaintext string, err error
 	}
 	plaintextBytes, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, privateKey, ciphertextBytes, nil)
 	if err != nil {
-		err = gerror.New("解密数据时发生错误:" + err.Error())
+		err = errkit.New("解密数据时发生错误:" + err.Error())
 		return
 	}
 	plaintext = string(plaintextBytes)
@@ -150,7 +148,7 @@ func SavePrivateKeyToFile(privateKey *rsa.PrivateKey, filename string) (err erro
 	privatePem := pem.EncodeToMemory(privateBlock)
 	err = os.WriteFile(filename, privatePem, 0600)
 	if err != nil {
-		err = gerror.New("保存私钥文件时发生错误:" + err.Error())
+		err = errkit.New("保存私钥文件时发生错误:" + err.Error())
 		return
 	}
 	return
@@ -166,7 +164,7 @@ func SavePublicKeyToFile(publicKey *rsa.PublicKey, filename string) (err error) 
 	publicPem := pem.EncodeToMemory(publicBlock)
 	err = os.WriteFile(filename, publicPem, 0644)
 	if err != nil {
-		err = gerror.New("保存公钥文件时发生错误:" + err.Error())
+		err = errkit.New("保存公钥文件时发生错误:" + err.Error())
 		return
 	}
 	return
@@ -176,17 +174,17 @@ func SavePublicKeyToFile(publicKey *rsa.PublicKey, filename string) (err error) 
 func ParsePrivateKeyFromPEM(pemBytes []byte) (privateKey *rsa.PrivateKey, err error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil || block.Type != "PRIVATE KEY" {
-		err = gerror.New("无效的私钥")
+		err = errkit.New("无效的私钥")
 		return
 	}
 	PKCS8PrivateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		err = gerror.New("解析私钥时发生错误:" + err.Error())
+		err = errkit.New("解析私钥时发生错误:" + err.Error())
 		return
 	}
 	privateKey, ok := PKCS8PrivateKey.(*rsa.PrivateKey)
 	if !ok {
-		err = gerror.New("解析私钥时发生错误:invalid public key type")
+		err = errkit.New("解析私钥时发生错误:invalid public key type")
 		return
 	}
 	return
@@ -196,19 +194,19 @@ func ParsePrivateKeyFromPEM(pemBytes []byte) (privateKey *rsa.PrivateKey, err er
 func ParsePublicKeyFromPEM(pemBytes []byte) (publicKey *rsa.PublicKey, err error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil || block.Type != "PUBLIC KEY" {
-		err = gerror.New("无效的公钥")
+		err = errkit.New("无效的公钥")
 		return
 	}
 
 	pKIXPublicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		err = gerror.New("解析公钥时发生错误:" + err.Error())
+		err = errkit.New("解析公钥时发生错误:" + err.Error())
 		return
 	}
 
 	publicKey, ok := pKIXPublicKey.(*rsa.PublicKey)
 	if !ok {
-		err = gerror.New("解析公钥时发生错误:invalid public key type")
+		err = errkit.New("解析公钥时发生错误:invalid public key type")
 		return
 	}
 
@@ -263,7 +261,7 @@ func EncryptPassword(password string, salt string) (string, error) {
 func EncryptString(data string) (encrypt string, err error) {
 	h := md5.New()
 	if _, err = h.Write([]byte(data)); err != nil {
-		err = errors.Wrap(err, `hash.Write failed`)
+		err = errkit.Wrap(err, `hash.Write failed`)
 		return "", err
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil

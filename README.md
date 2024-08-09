@@ -1,6 +1,36 @@
 # NexFrame
 
 
+## API核心处理框架说明
+实现自定义API框架与静态文件处理
+实现了一个灵活、可扩展的API框架，集成了静态文件处理、中间件支持和Swagger文档生成功能。主要特性包括：
+
+1. 核心框架结构（APIFramework）:
+    - 支持动态注册控制器和API路由
+    - 集成Swagger规范生成
+    - 灵活的中间件系统
+
+2. 静态文件处理:
+    - 实现了自定义StaticHandler，支持多种文件系统（fs.FS接口）
+    - 支持设置静态目录（SetStaticDir）和Web根目录（SetWebRoot）
+
+3. 中间件支持:
+    - 使用WithMiddleware方法添加全局中间件
+    - 支持多个中间件的链式调用
+
+4. API注册和路由:
+    - 自动发现和注册API（discoverAPIs方法）
+    - 支持路由前缀设置
+
+5. Swagger集成:
+    - 自动生成Swagger JSON规范
+    - 提供Swagger UI访问路由
+
+6. 灵活的配置:
+    - 支持自定义文件系统（SetFileSystem方法）
+    - 链式调用API，提高代码可读性
+
+
 NexFrame是一款基于 Go 语言开发的企业级开发框架，旨在为开发者提供高效、可靠、可扩展的开发平台。该框架集成了 **serviceweaver**、**GORM**、**gorilla/mux** 等业界领先的开源库，并参考 **GoFrame** 框架在 API 定义和自动绑定控制器方面的优秀设计，打造了一套功能强大、易于使用的开发解决方案。
 
 ## **核心特性**
