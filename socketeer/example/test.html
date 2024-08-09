@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Page</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #messageArea { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        input, button { margin: 5px 0; }
+    </style>
+</head>
+<body>
+<h1>WebSocket Test Page</h1>
+<div>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+</div>
+<div>
+    <input type="text" id="roomInput" placeholder="Room name">
+    <button id="joinRoomBtn">Join Room</button>
+</div>
+<div>
+    <input type="text" id="messageInput" placeholder="Message">
+    <input type="text" id="recipientInput" placeholder="Recipient (for private message)">
+    <button id="sendBtn">Send Message</button>
+</div>
+<div id="messageArea"></div>
+
+<script>
+    let socket;
+    const messageArea = $('#messageArea');
+    const connectBtn = $('#connectBtn');
+    const disconnectBtn = $('#disconnectBtn');
+    const joinRoomBtn = $('#joinRoomBtn');
+    const sendBtn = $('#sendBtn');
+
+    connectBtn.click(() => {
+        appendMessage('Attempting to connect...');
+        try {
+            socket = new WebSocket('ws://127.0.0.1:8080/ws');
+
+            socket.onopen = () => {
+                appendMessage('Connected to WebSocket server');
+                connectBtn.prop('disabled', true);
+                disconnectBtn.prop('disabled', false);
+            };
+
+            socket.onmessage = (event) => {
+                appendMessage('Received: ' + event.data);
+            };
+
+            socket.onclose = (event) => {
+                appendMessage(`Disconnected from WebSocket server. Code: ${event.code}, Reason: ${event.reason}`);
+                connectBtn.prop('disabled', false);
+                disconnectBtn.prop('disabled', true);
+            };
+
+            socket.onerror = (error) => {
+                appendMessage('WebSocket Error: ' + JSON.stringify(error));
+            };
+        } catch (error) {
+            appendMessage('Error creating WebSocket: ' + error.message);
+        }
+    });
+
+    disconnectBtn.click(() => {
+        if (socket) {
+            socket.close();
+        }
+    });
+
+    joinRoomBtn.click(() => {
+        const room = $('#roomInput').val();
+        if (room) {
+            sendMessage({
+                type: 'join',
+                room: room
+            });
+        }
+    });
+
+    sendBtn.click(() => {
+        const message = $('#messageInput').val();
+        const recipient = $('#recipientInput').val();
+        const room = $('#roomInput').val();
+
+        if (message) {
+            if (recipient) {
+                sendMessage({
+                    type: 'private',
+                    to: recipient,
+                    message_body: message
+                });
+            } else if (room) {
+                sendMessage({
+                    type: 'room',
+                    room: room,
+                    message_body: message
+                });
+            }
+        }
+    });
+
+    function sendMessage(msg) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            const fullMsg = {
+                id: Date.now().toString(),
+                from: 'WebClient',
+                ...msg
+            };
+            socket.send(JSON.stringify(fullMsg));
+            appendMessage('Sent: ' + JSON.stringify(fullMsg));
+        } else {
+            appendMessage('Error: WebSocket is not connected. Current state: ' + (socket ? socket.readyState : 'No socket'));
+        }
+    }
+
+    function appendMessage(message) {
+        messageArea.append($('<div>').text(message));
+        messageArea.scrollTop(messageArea[0].scrollHeight);
+        console.log(message);  // Also log to console for easier debugging
+    }
+</script>
+</body>
+</html>
