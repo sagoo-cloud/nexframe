@@ -6,19 +6,6 @@ import (
 	"time"
 )
 
-// mockClock 是一个用于测试的模拟时钟
-type mockClock struct {
-	now time.Time
-}
-
-func (m *mockClock) Now() time.Time {
-	return m.now
-}
-
-func (m *mockClock) Sleep(d time.Duration) {
-	m.now = m.now.Add(d)
-}
-
 func TestNewBucket(t *testing.T) {
 	ctx := context.Background()
 	b, err := NewBucket(ctx, time.Second, 10)
@@ -102,7 +89,10 @@ func TestBucketAvailable(t *testing.T) {
 		t.Errorf("Expected 10 available tokens, got %d", available)
 	}
 
-	b.Take(ctx, 5)
+	err := b.Take(ctx, 5)
+	if err != nil {
+		return
+	}
 
 	if available := b.Available(); available != 5 {
 		t.Errorf("Expected 5 available tokens, got %d", available)
@@ -129,10 +119,13 @@ func TestBucketWithContext(t *testing.T) {
 	b, _ := NewBucket(ctx, time.Millisecond*100, 1, WithStrictMode())
 
 	// 首先获取唯一的令牌
-	b.Take(ctx, 1)
+	err := b.Take(ctx, 1)
+	if err != nil {
+		return
+	}
 
 	// 尝试获取另一个令牌应该因为上下文超时而失败
-	err := b.Take(ctx, 1)
+	err = b.Take(ctx, 1)
 	if err == nil {
 		t.Errorf("Expected context deadline exceeded error")
 	}
@@ -144,7 +137,10 @@ func TestBucketRefill(t *testing.T) {
 
 	// 耗尽所有令牌
 	for i := 0; i < 10; i++ {
-		b.Take(ctx, 1)
+		err := b.Take(ctx, 1)
+		if err != nil {
+			return
+		}
 	}
 
 	// 等待足够的时间以重新填充一些令牌
