@@ -331,7 +331,6 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 	}
 }
 
-// decodeGetRequest 从 URL 查询参数中解析数据到结构体
 func (f *APIFramework) decodeGetRequest(r *http.Request, dst interface{}) error {
 	values := r.URL.Query()
 	v := reflect.ValueOf(dst).Elem()
@@ -343,19 +342,34 @@ func (f *APIFramework) decodeGetRequest(r *http.Request, dst interface{}) error 
 			continue // 跳过匿名字段（如 Meta）
 		}
 
-		tag := field.Tag.Get("json")
+		// 首先检查 'p' 标签，然后是 'json' 标签
+		tag := field.Tag.Get("p")
+		if tag == "" {
+			tag = field.Tag.Get("json")
+		}
 		if tag == "" {
 			tag = strings.ToLower(field.Name)
 		}
 
 		value := values.Get(tag)
-		if value == "" {
-			continue
-		}
 
-		err := setField(v.Field(i), value)
-		if err != nil {
-			return err
+		// 处理嵌套结构体
+		if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct {
+			// 创建一个新的结构体实例
+			nestedStruct := reflect.New(field.Type.Elem())
+			// 递归调用 decodeGetRequest
+			err := f.decodeGetRequest(r, nestedStruct.Interface())
+			if err != nil {
+				return err
+			}
+			// 设置嵌套结构体
+			v.Field(i).Set(nestedStruct)
+		} else if value != "" {
+			// 处理常规字段
+			err := setField(v.Field(i), value)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
