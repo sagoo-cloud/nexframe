@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/sagoo-cloud/nexframe/redisx"
 	"strings"
 	"time"
 )
@@ -12,24 +13,16 @@ var ctx = context.Background()
 
 // RedisCache 结构体，实现 Redis 缓存
 type RedisCache struct {
-	client *redis.Client
+	client redis.UniversalClient
 	stats  *CacheStats
 	prefix string
+	dbname string
 }
 
 // NewRedisCache 创建 RedisCache 实例
 func NewRedisCache(config *Config) *RedisCache {
-	client := redis.NewClient(&redis.Options{
-		Addr:         config.RedisAddr,
-		Password:     config.RedisPassword,
-		DB:           config.RedisDB,
-		PoolSize:     1000,            // 增加连接池大小
-		MinIdleConns: 100,             // 保持一些空闲连接
-		DialTimeout:  5 * time.Second, // 连接超时
-		ReadTimeout:  3 * time.Second, // 读取超时
-		WriteTimeout: 3 * time.Second, // 写入超时
-		PoolTimeout:  4 * time.Second, // 从连接池获取连接的超时时间
-	})
+
+	client := redisx.DB().GetClient()
 
 	// 启用键空间通知
 	client.ConfigSet(ctx, "notify-keyspace-events", "Ex")
@@ -38,6 +31,7 @@ func NewRedisCache(config *Config) *RedisCache {
 		client: client,
 		stats:  NewCacheStats(),
 		prefix: config.RedisPrefix,
+		dbname: redisx.DB().GetDbname(),
 	}
 }
 
@@ -78,7 +72,7 @@ func (rc *RedisCache) GetStats() (float64, float64) {
 
 // SubscribeExpiryEvents 订阅 Redis 键过期事件
 func (rc *RedisCache) SubscribeExpiryEvents(callback func(string)) {
-	pubsub := rc.client.PSubscribe(ctx, fmt.Sprintf("__keyevent@%d__:expired", rc.client.Options().DB))
+	pubsub := rc.client.PSubscribe(ctx, fmt.Sprintf("__keyevent@%d__:expired", rc.dbname))
 
 	go func() {
 		for msg := range pubsub.Channel() {

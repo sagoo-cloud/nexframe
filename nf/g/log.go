@@ -20,7 +20,7 @@ func Log(name ...string) zlog.Logger {
 
 func getLogConfig() zlog.LogConfig {
 	var swaConfig config.ModSwaConfig
-	v := Cfg()
+	v := Cfg().GetConfig()
 	v.OnConfigChange(func(e fsnotify.Event) {
 		fmt.Println("config file changed:", e.Name)
 		if err := v.Unmarshal(&swaConfig); err != nil {
