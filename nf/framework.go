@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
@@ -333,47 +334,126 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 
 func (f *APIFramework) decodeGetRequest(r *http.Request, dst interface{}) error {
 	values := r.URL.Query()
-	v := reflect.ValueOf(dst).Elem()
+	return f.decodeStructFromValues(values, reflect.ValueOf(dst).Elem())
+}
+
+func (f *APIFramework) decodeStructFromValues(values url.Values, v reflect.Value) error {
 	t := v.Type()
 
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
+		fieldValue := v.Field(i)
+
+		// 处理匿名字段
 		if field.Anonymous {
-			continue // 跳过匿名字段（如 Meta）
+			if field.Type.Kind() == reflect.Struct {
+				if err := f.decodeStructFromValues(values, fieldValue); err != nil {
+					return err
+				}
+			} else if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct {
+				if fieldValue.IsNil() {
+					fieldValue.Set(reflect.New(field.Type.Elem()))
+				}
+				if err := f.decodeStructFromValues(values, fieldValue.Elem()); err != nil {
+					return err
+				}
+			}
+			continue
 		}
 
-		// 首先检查 'p' 标签，然后是 'json' 标签
-		tag := field.Tag.Get("p")
-		if tag == "" {
-			tag = field.Tag.Get("json")
-		}
-		if tag == "" {
-			tag = strings.ToLower(field.Name)
+		fieldName, shouldFill := getFieldName(field)
+		if !shouldFill {
+			continue
 		}
 
-		value := values.Get(tag)
+		// 处理非匿名的嵌套结构体
+		if field.Type.Kind() == reflect.Struct || (field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct) {
+			var structValue reflect.Value
+			if field.Type.Kind() == reflect.Ptr {
+				if fieldValue.IsNil() {
+					fieldValue.Set(reflect.New(field.Type.Elem()))
+				}
+				structValue = fieldValue.Elem()
+			} else {
+				structValue = fieldValue
+			}
 
-		// 处理嵌套结构体
-		if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct {
-			// 创建一个新的结构体实例
-			nestedStruct := reflect.New(field.Type.Elem())
-			// 递归调用 decodeGetRequest
-			err := f.decodeGetRequest(r, nestedStruct.Interface())
-			if err != nil {
+			if err := f.decodeStructFromValues(values, structValue); err != nil {
 				return err
 			}
-			// 设置嵌套结构体
-			v.Field(i).Set(nestedStruct)
-		} else if value != "" {
-			// 处理常规字段
-			err := setField(v.Field(i), value)
-			if err != nil {
+			continue
+		}
+
+		// 处理切片
+		if field.Type.Kind() == reflect.Slice {
+			sliceValues := values[fieldName]
+			if len(sliceValues) > 0 {
+				slice := reflect.MakeSlice(field.Type, len(sliceValues), len(sliceValues))
+				for i, sliceValue := range sliceValues {
+					if err := setField(slice.Index(i), sliceValue); err != nil {
+						return err
+					}
+				}
+				fieldValue.Set(slice)
+			}
+			continue
+		}
+
+		// 处理 map
+		if field.Type.Kind() == reflect.Map {
+			mapValues := make(map[string][]string)
+			prefix := fieldName + "["
+			for key, vals := range values {
+				if strings.HasPrefix(key, prefix) && strings.HasSuffix(key, "]") {
+					mapKey := key[len(prefix) : len(key)-1]
+					mapValues[mapKey] = vals
+				}
+			}
+			if len(mapValues) > 0 {
+				mapValue := reflect.MakeMap(field.Type)
+				for key, vals := range mapValues {
+					mapKey := reflect.New(field.Type.Key()).Elem()
+					if err := setField(mapKey, key); err != nil {
+						return err
+					}
+					mapVal := reflect.New(field.Type.Elem()).Elem()
+					if err := setField(mapVal, vals[0]); err != nil {
+						return err
+					}
+					mapValue.SetMapIndex(mapKey, mapVal)
+				}
+				fieldValue.Set(mapValue)
+			}
+			continue
+		}
+
+		// 处理基本类型
+		value := values.Get(fieldName)
+		if value != "" {
+			if err := setField(fieldValue, value); err != nil {
 				return err
 			}
 		}
 	}
 
 	return nil
+}
+
+// getFieldName 获取字段的名称
+func getFieldName(field reflect.StructField) (string, bool) {
+	if tag, ok := field.Tag.Lookup("p"); ok && tag != "" {
+		return tag, true
+	}
+
+	if tag, ok := field.Tag.Lookup("json"); ok && tag != "" {
+		parts := strings.Split(tag, ",")
+		if parts[0] != "" {
+			return parts[0], true
+		}
+	}
+
+	// 如果没有标签，使用字段名
+	return field.Name, true
 }
 
 // setField 设置字段值
@@ -387,7 +467,26 @@ func setField(field reflect.Value, value string) error {
 			return err
 		}
 		field.SetInt(intValue)
-	// 可以根据需要添加其他类型的处理
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		uintValue, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return err
+		}
+		field.SetUint(uintValue)
+	case reflect.Float32, reflect.Float64:
+		floatValue, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return err
+		}
+		field.SetFloat(floatValue)
+	case reflect.Bool:
+		boolValue, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		field.SetBool(boolValue)
+	case reflect.Interface:
+		field.Set(reflect.ValueOf(value))
 	default:
 		return fmt.Errorf("unsupported field type %s", field.Type())
 	}
