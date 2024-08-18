@@ -1,6 +1,7 @@
 package zlog
 
 import (
+	"context"
 	"fmt"
 	"github.com/rs/zerolog"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -55,13 +56,13 @@ type Logger interface {
 	Fatal(message string, args ...interface{})
 	Panic(message string, args ...interface{})
 
-	Tracef(format string, args ...interface{})
-	Debugf(format string, args ...interface{})
-	Infof(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Panicf(format string, args ...interface{})
+	Tracef(ctx context.Context, format string, args ...interface{})
+	Debugf(ctx context.Context, format string, args ...interface{})
+	Infof(ctx context.Context, format string, args ...interface{})
+	Warnf(ctx context.Context, format string, args ...interface{})
+	Errorf(ctx context.Context, format string, args ...interface{})
+	Fatalf(ctx context.Context, format string, args ...interface{})
+	Panicf(ctx context.Context, format string, args ...interface{})
 
 	SetConfig(config LogConfig)
 	GetConfig() LogConfig
@@ -214,50 +215,51 @@ func (l *loggerImpl) Panic(message string, args ...interface{}) {
 	}
 }
 
-func (l *loggerImpl) logf(level zerolog.Level, format string, args ...interface{}) {
+func (l *loggerImpl) logf(ctx context.Context, level zerolog.Level, format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
+	l.zl.WithContext(ctx)
 	l.zl.WithLevel(level).Msg(message)
 }
 
-func (l *loggerImpl) Tracef(format string, args ...interface{}) {
+func (l *loggerImpl) Tracef(ctx context.Context, format string, args ...interface{}) {
 	if l.isTraceEnabled {
-		l.logf(zerolog.TraceLevel, format, args...)
+		l.logf(ctx, zerolog.TraceLevel, format, args...)
 	}
 }
 
-func (l *loggerImpl) Debugf(format string, args ...interface{}) {
+func (l *loggerImpl) Debugf(ctx context.Context, format string, args ...interface{}) {
 	if l.isDebugEnabled {
-		l.logf(zerolog.DebugLevel, format, args...)
+		l.logf(ctx, zerolog.DebugLevel, format, args...)
 	}
 }
 
-func (l *loggerImpl) Infof(format string, args ...interface{}) {
+func (l *loggerImpl) Infof(ctx context.Context, format string, args ...interface{}) {
 	if l.isInfoEnabled {
-		l.logf(zerolog.InfoLevel, format, args...)
+		l.logf(ctx, zerolog.InfoLevel, format, args...)
 	}
 }
 
-func (l *loggerImpl) Warnf(format string, args ...interface{}) {
+func (l *loggerImpl) Warnf(ctx context.Context, format string, args ...interface{}) {
 	if l.isWarnEnabled {
-		l.logf(zerolog.WarnLevel, format, args...)
+		l.logf(ctx, zerolog.WarnLevel, format, args...)
 	}
 }
 
-func (l *loggerImpl) Errorf(format string, args ...interface{}) {
+func (l *loggerImpl) Errorf(ctx context.Context, format string, args ...interface{}) {
 	if l.isErrorEnabled {
-		l.logf(zerolog.ErrorLevel, format, args...)
+		l.logf(ctx, zerolog.ErrorLevel, format, args...)
 	}
 }
 
-func (l *loggerImpl) Fatalf(format string, args ...interface{}) {
+func (l *loggerImpl) Fatalf(ctx context.Context, format string, args ...interface{}) {
 	if l.isFatalEnabled {
-		l.logf(zerolog.FatalLevel, format, args...)
+		l.logf(ctx, zerolog.FatalLevel, format, args...)
 	}
 }
 
-func (l *loggerImpl) Panicf(format string, args ...interface{}) {
+func (l *loggerImpl) Panicf(ctx context.Context, format string, args ...interface{}) {
 	if l.isPanicEnabled {
-		l.logf(zerolog.PanicLevel, format, args...)
+		l.logf(ctx, zerolog.PanicLevel, format, args...)
 	}
 }
 
