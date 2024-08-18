@@ -1,0 +1,10 @@
+.buildpath
+.hgignore.swp
+.project
+.orig
+.swp
+.idea/
+.settings/
+.vscode/
+*.iml
+**/.DS_Store
