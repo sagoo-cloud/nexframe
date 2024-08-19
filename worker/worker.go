@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gogf/gf/v2/frame/g"
-	"github.com/gogf/gf/v2/os/glog"
-	"github.com/gogf/gf/v2/util/guid"
 	"github.com/golang-module/carbon/v2"
 	"github.com/gorhill/cronexpr"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
+	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/utils/guid"
 	"github.com/sagoo-cloud/nexframe/utils/nx"
 	"io"
 	"net/http"
@@ -84,7 +83,7 @@ func (p periodTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) (err 
 	}
 	defer func() {
 		if err != nil {
-			glog.Debugf(ctx, "run task failed. uuid: %s task: %s Error:%s", uid, payload, err)
+			g.Log().Debugf(ctx, "run task failed. uuid: %s task: %s Error:%s", uid, payload, err)
 		}
 	}()
 	if p.tk.ops.handler != nil {
@@ -109,7 +108,7 @@ func (p periodTaskHandler) httpCallback(ctx context.Context, payload Payload) (e
 	body := payload.String()
 	r, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tk.ops.callback, bytes.NewReader([]byte(body)))
 	if err != nil {
-		g.Log().Error(ctx, "创建HTTP请求失败: ", err)
+		g.Log().Errorf(ctx, "创建HTTP请求失败: %v", err)
 		return err
 	}
 	r.Header.Add("Content-Type", "application/json")
@@ -117,20 +116,20 @@ func (p periodTaskHandler) httpCallback(ctx context.Context, payload Payload) (e
 	// 确保响应体正确关闭，防止资源泄漏
 	res, err := client.Do(r)
 	if err != nil {
-		g.Log().Error(ctx, "执行HTTP请求失败: ", err)
+		g.Log().Errorf(ctx, "执行HTTP请求失败: %v", err)
 		return err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			g.Log().Error(ctx, "body close err", err)
+			g.Log().Errorf(ctx, "body close err: %v", err)
 		}
 	}(res.Body)
 
 	responseBytes, _ := io.ReadAll(res.Body)
 	if res.StatusCode != http.StatusOK {
 		err = errors.New("HTTP回调状态码异常：" + res.Status)
-		g.Log().Debug(ctx, "HTTP回调状态码非200: ", err, "响应内容: ", string(responseBytes))
+		g.Log().Debugf(ctx, "HTTP回调状态码非200: %v 响应内容: %s", err, string(responseBytes))
 		return err
 	}
 	return nil
@@ -212,7 +211,7 @@ func New(options ...func(*Options)) *Worker {
 			mux.Handle(ops.group, h)
 
 			if err := srv.Run(mux); err != nil {
-				g.Log().Debug(context.Background(), "running task handler failed: ", err)
+				g.Log().Debugf(context.Background(), "running task handler failed: ", err)
 			}
 		}()
 
@@ -229,7 +228,7 @@ func New(options ...func(*Options)) *Worker {
 			var h periodTaskHandler
 			h.tk = *worker
 			if err := srv.Run(h); err != nil {
-				g.Log().Debug(context.Background(), "running task handler failed: ", err)
+				g.Log().Debugf(context.Background(), "running task handler failed: ", err)
 			}
 		}()
 	}
@@ -429,7 +428,7 @@ func (wk *Worker) scan() {
 	defer func() {
 		err := wk.lock.Unlock(ctx)
 		if err != nil {
-			g.Log().Error(ctx, "unlock failed: ", err)
+			g.Log().Errorf(ctx, "unlock failed: %v", err)
 		}
 	}()
 	m, _ := wk.redis.HGetAll(ctx, wk.ops.redisPeriodKey).Result()
