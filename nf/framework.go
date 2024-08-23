@@ -9,13 +9,13 @@ import (
 	"github.com/sagoo-cloud/nexframe/nf/g"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -295,12 +295,30 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 				return
 			}
 		case http.MethodPost, http.MethodPut, http.MethodPatch:
-			if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			if err := f.decodeJSONRequest(r, req); err != nil {
+				log.Printf("Error decoding JSON request: %v", err)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		case http.MethodDelete:
+			// 对于 DELETE 请求，我们可能需要处理 URL 参数和请求体
+			if err := f.decodeDeleteRequest(r, req); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 		default:
 			http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if f.debug {
+			jsonBytes, _ := json.MarshalIndent(req, "", "  ")
+			log.Printf("Parsed request object:\n%s", string(jsonBytes))
+		}
+
+		if err := g.Validator().Data(req).Run(context.Background()); err != nil {
+			log.Printf("Validation error: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -330,6 +348,67 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(results[0].Interface())
 	}
+}
+
+// decodeJSONRequest 处理 JSON 请求体
+func (f *APIFramework) decodeJSONRequest(r *http.Request, dst interface{}) error {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read request body: %v", err)
+	}
+	defer r.Body.Close()
+
+	if f.debug {
+		log.Printf("Raw JSON data:\n%s", string(body))
+	}
+
+	// 创建一个临时结构来存储JSON数据
+	var tempData map[string]interface{}
+	if err := json.Unmarshal(body, &tempData); err != nil {
+		return fmt.Errorf("failed to decode JSON: %v", err)
+	}
+
+	// 使用反射设置字段
+	dstValue := reflect.ValueOf(dst).Elem()
+	for i := 0; i < dstValue.NumField(); i++ {
+		field := dstValue.Type().Field(i)
+		if field.Anonymous {
+			continue // 跳过匿名字段（如g.Meta）
+		}
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" {
+			jsonTag = field.Name
+		}
+		if value, ok := tempData[jsonTag]; ok {
+			if err := setField(dstValue.Field(i), value); err != nil {
+				return fmt.Errorf("error setting field %s: %v", field.Name, err)
+			}
+		}
+	}
+
+	if f.debug {
+		jsonBytes, _ := json.MarshalIndent(dst, "", "  ")
+		log.Printf("Parsed request object:\n%s", string(jsonBytes))
+	}
+
+	return nil
+}
+
+// decodeDeleteRequest 处理 DELETE 请求
+func (f *APIFramework) decodeDeleteRequest(r *http.Request, dst interface{}) error {
+	// 首先尝试从 URL 参数解析
+	if err := f.decodeGetRequest(r, dst); err != nil {
+		return err
+	}
+
+	// 如果请求体不为空，也尝试解析 JSON
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (f *APIFramework) decodeGetRequest(r *http.Request, dst interface{}) error {
@@ -454,43 +533,6 @@ func getFieldName(field reflect.StructField) (string, bool) {
 
 	// 如果没有标签，使用字段名
 	return field.Name, true
-}
-
-// setField 设置字段值
-func setField(field reflect.Value, value string) error {
-	switch field.Kind() {
-	case reflect.String:
-		field.SetString(value)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		intValue, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return err
-		}
-		field.SetInt(intValue)
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		uintValue, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			return err
-		}
-		field.SetUint(uintValue)
-	case reflect.Float32, reflect.Float64:
-		floatValue, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return err
-		}
-		field.SetFloat(floatValue)
-	case reflect.Bool:
-		boolValue, err := strconv.ParseBool(value)
-		if err != nil {
-			return err
-		}
-		field.SetBool(boolValue)
-	case reflect.Interface:
-		field.Set(reflect.ValueOf(value))
-	default:
-		return fmt.Errorf("unsupported field type %s", field.Type())
-	}
-	return nil
 }
 
 // GetServer 返回http.Handler接口，用于启动服务
