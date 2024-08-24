@@ -4,10 +4,10 @@ go 1.22.4
 
 require (
 	github.com/ServiceWeaver/weaver v0.24.3
+	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/coocood/freecache v1.2.4
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-openapi/spec v0.21.0
-	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang-module/carbon/v2 v2.3.12
 	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
 	github.com/gorilla/mux v1.8.1
@@ -19,6 +19,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
 	github.com/swaggo/swag v1.16.3
+	github.com/tealeg/xlsx v1.0.5
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/trace v1.28.0
 	golang.org/x/text v0.17.0
@@ -36,7 +37,6 @@ require (
 	github.com/DataDog/hyperloglog v0.0.0-20220804205443-1806d9b66146 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
-	github.com/apache/rocketmq-client-go/v2 v2.1.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect

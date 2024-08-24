@@ -41,7 +41,7 @@ func getSystemConfig() *viper.Viper {
 
 	err := v.ReadInConfig()
 	if err != nil {
-		panic(fmt.Errorf("读取swa toml配置文件失败: %s \n", err))
+		panic(fmt.Errorf("读取config.toml配置文件失败: %s \n", err))
 	}
 
 	v.WatchConfig()
