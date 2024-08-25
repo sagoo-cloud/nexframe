@@ -2,16 +2,19 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"github.com/sagoo-cloud/nexframe/i18n"
+	"github.com/tealeg/xlsx"
+	"github.com/xuri/excelize/v2"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
-
-	"github.com/tealeg/xlsx"
 )
 
 // ToMultiSheetExcel 生成io.ReadSeeker  参数 titleList 为Excel表头，dataList 为数据，data 键为sheet
@@ -167,4 +170,43 @@ func CreateFilePath(filePath string) error {
 		err = os.MkdirAll(path, os.ModePerm)
 	}
 	return err
+}
+
+// ReadExcelFile 读取EXCEL文件
+func ReadExcelFile(r *http.Request, tableName ...string) (rows [][]string, err error) {
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fileName := r.FormValue("file_name") // 获取文件名字
+	// 获取文件后缀
+	var fileSuffix = fileName[strings.LastIndex(fileName, ".")+1:]
+
+	// 判断文件后缀是否为.xlsx
+	if !strings.EqualFold(fileSuffix, "xlsx") {
+		return nil, errors.New("文件类型错误")
+	}
+
+	// 使用excelize从文件流中打开Excel文件
+	f, err := excelize.OpenReader(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// 默认读取第一个sheet
+	firstSheet := ""
+	if len(tableName) > 0 {
+		firstSheet = tableName[0]
+	} else {
+		firstSheet = f.GetSheetName(0)
+	}
+
+	rows, err = f.GetRows(firstSheet)
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
 }
