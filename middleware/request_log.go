@@ -81,24 +81,6 @@ func RequestLog(logger *slog.Logger) mux.MiddlewareFunc {
 	}
 }
 
-// customResponseWriter is a custom response writer that captures the status code and response size
-type customResponseWriter struct {
-	http.ResponseWriter
-	status int
-	size   int
-}
-
-func (crw *customResponseWriter) WriteHeader(status int) {
-	crw.status = status
-	crw.ResponseWriter.WriteHeader(status)
-}
-
-func (crw *customResponseWriter) Write(b []byte) (int, error) {
-	size, err := crw.ResponseWriter.Write(b)
-	crw.size += size
-	return size, err
-}
-
 // getClientIP tries to get the real client IP
 func getClientIP(r *http.Request) string {
 	ip := r.Header.Get("X-Real-IP")
