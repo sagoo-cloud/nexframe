@@ -2,7 +2,7 @@ package meta
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/gstructs"
+	"github.com/sagoo-cloud/nexframe/utils/gstructs"
 	"reflect"
 )
 
