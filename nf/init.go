@@ -2,7 +2,7 @@ package nf
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/httpSwagger"
+	"github.com/sagoo-cloud/nexframe/nf/swagger"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
 	"log"
 	"net/http"
@@ -65,7 +65,7 @@ func (f *APIFramework) Init() {
 	// 添加 Swagger UI 路由
 	f.router.HandleFunc("/swagger/doc.json", f.serveSwaggerSpec)
 	// Swagger UI 路由
-	f.router.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
+	f.router.PathPrefix("/swagger/").Handler(swagger.WrapHandler)
 
 	// 设置静态资源路由
 	if f.wwwRoot != "" && f.fileSystem != nil {

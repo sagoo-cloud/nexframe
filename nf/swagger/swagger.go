@@ -1,4 +1,4 @@
-package httpSwagger
+package swagger
 
 import (
 	"html/template"
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/sagoo-cloud/nexframe/httpSwagger/swaggerFiles"
+	"github.com/sagoo-cloud/nexframe/nf/swagger/swaggerFiles"
 	"github.com/swaggo/swag"
 )
 
