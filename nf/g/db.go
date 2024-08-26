@@ -4,8 +4,6 @@ import (
 	"github.com/sagoo-cloud/nexframe/database"
 	"github.com/sagoo-cloud/nexframe/nf/config"
 	"gorm.io/gorm"
-	"log"
-	"os"
 )
 
 var (
@@ -15,9 +13,8 @@ var (
 func init() {
 	defer func() {
 		if r := recover(); r != nil {
-			// 自定义错误信息，隐藏详细路径
-			log.Printf("Error: %s , %s", "Failed to obtain Gorm DB", r)
-			os.Exit(1)
+			//log.Printf("Error: %s , %s", "Failed to obtain Gorm DB", r)
+			//os.Exit(1)
 		}
 	}()
 

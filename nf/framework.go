@@ -38,6 +38,7 @@ type Controller interface {
 
 // APIFramework 核心框架结构
 type APIFramework struct {
+	addr           string
 	router         *mux.Router
 	definitions    map[string]APIDefinition
 	controllers    map[string]Controller
@@ -141,6 +142,15 @@ func (f *APIFramework) SetStaticDir(dir string) *APIFramework {
 func (f *APIFramework) SetWebRoot(dir string) *APIFramework {
 	f.wwwRoot = dir
 	return f
+}
+
+func (f *APIFramework) BindHandler(prefix string, handler http.Handler) error {
+	f.router.Handle(prefix, handler)
+	return nil
+}
+func (f *APIFramework) BindHandlerFunc(prefix string, handler http.HandlerFunc) error {
+	f.router.Handle(prefix, handler)
+	return nil
 }
 
 // RegisterController 注册控制器
@@ -544,6 +554,15 @@ func (f *APIFramework) GetServer() http.Handler {
 		f.Init()
 	})
 	return f.router
+}
+
+func (f *APIFramework) SetPort(addr string) {
+	f.addr = addr
+}
+
+func (f *APIFramework) Run() {
+
+	log.Fatal(http.ListenAndServe(f.addr, f.GetServer()))
 }
 
 // PrintAPIRoutes 输出所有注册的API访问地址
