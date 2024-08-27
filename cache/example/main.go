@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/sagoo-cloud/nexframe/cache"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"log"
 	"math/rand"
 	"net/http"
@@ -18,7 +19,7 @@ func main() {
 	}()
 
 	// 创建配置
-	config := &cache.Config{
+	config := &configs.CacheConfig{
 		MemoryCacheSize: 10 * 1024 * 1024, // 10MB
 		RedisAddr:       "localhost:6379",
 		RedisPassword:   "",
