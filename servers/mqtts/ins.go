@@ -2,7 +2,7 @@ package mqtts
 
 import (
 	"github.com/eclipse/paho.mqtt.golang"
-	"github.com/sagoo-cloud/nexframe/nf/configs"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"sync"
 )
 

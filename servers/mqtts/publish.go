@@ -3,7 +3,7 @@ package mqtts
 import (
 	"encoding/json"
 	"errors"
-	"github.com/sagoo-cloud/nexframe/nf/configs"
+	"github.com/sagoo-cloud/nexframe/configs"
 )
 
 func Publish(topic string, payload interface{}) error {

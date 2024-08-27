@@ -1,7 +1,7 @@
 package configs
 
 import (
-	"github.com/sagoo-cloud/nexframe/args"
+	"github.com/sagoo-cloud/nexframe/command/args"
 	"strings"
 )
 

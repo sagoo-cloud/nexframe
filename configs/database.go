@@ -2,7 +2,7 @@ package configs
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/args"
+	"github.com/sagoo-cloud/nexframe/command/args"
 )
 
 const (
