@@ -8,11 +8,10 @@ import (
 func Env(key string, value ...interface{}) interface{} {
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
-	commKey := strings.Join([]string{"commons", key}, ".")
 	if cfg.IsSet(modeKey) {
 		return cfg.Get(modeKey)
-	} else if cfg.IsSet(commKey) {
-		return cfg.Get(commKey)
+	} else if cfg.IsSet(key) {
+		return cfg.Get(key)
 	} else {
 		return value[0]
 	}
@@ -21,12 +20,11 @@ func Env(key string, value ...interface{}) interface{} {
 func EnvString(key string, value ...interface{}) string {
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
-	commKey := strings.Join([]string{"commons", key}, ".")
 	var ret string
 	if cfg.IsSet(modeKey) {
 		ret = cfg.GetString(modeKey)
-	} else if cfg.IsSet(commKey) {
-		ret = cfg.GetString(commKey)
+	} else if cfg.IsSet(key) {
+		ret = cfg.GetString(key)
 	} else {
 		ret = value[0].(string)
 	}
@@ -35,12 +33,11 @@ func EnvString(key string, value ...interface{}) string {
 func EnvInt(key string, value ...interface{}) int {
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
-	commKey := strings.Join([]string{"commons", key}, ".")
 	var ret int
 	if cfg.IsSet(modeKey) {
 		ret = cfg.GetInt(modeKey)
-	} else if cfg.IsSet(commKey) {
-		ret = cfg.GetInt(commKey)
+	} else if cfg.IsSet(key) {
+		ret = cfg.GetInt(key)
 	} else {
 		ret = value[0].(int)
 	}
@@ -49,12 +46,11 @@ func EnvInt(key string, value ...interface{}) int {
 func EnvBool(key string, value ...interface{}) bool {
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
-	commKey := strings.Join([]string{"commons", key}, ".")
 	var ret bool
 	if cfg.IsSet(modeKey) {
 		ret = cfg.GetBool(modeKey)
-	} else if cfg.IsSet(commKey) {
-		ret = cfg.GetBool(commKey)
+	} else if cfg.IsSet(key) {
+		ret = cfg.GetBool(key)
 	} else {
 		ret = value[0].(bool)
 	}
@@ -63,12 +59,11 @@ func EnvBool(key string, value ...interface{}) bool {
 func EnvStringSlice(key string, value ...interface{}) []string {
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
-	commKey := strings.Join([]string{"commons", key}, ".")
 	var ret []string
 	if cfg.IsSet(modeKey) {
 		ret = cfg.GetStringSlice(modeKey)
-	} else if cfg.IsSet(commKey) {
-		ret = cfg.GetStringSlice(commKey)
+	} else if cfg.IsSet(key) {
+		ret = cfg.GetStringSlice(key)
 	} else {
 		ret = value[0].([]string)
 	}

@@ -30,8 +30,8 @@ func (ModCaptcha) WeaverMarshal(*codegen.Encoder)   {}
 func (ModCaptcha) WeaverUnmarshal(*codegen.Decoder) {}
 
 type ModGormDb struct {
-	DbType       string `mapstructure:"dbType" json:"dbType" yaml:"dbType"`
-	Ip           string `mapstructure:"ip" json:"ip" yaml:"ip"`
+	Driver       string `mapstructure:"driver" json:"driver" yaml:"driver"`
+	Host         string `mapstructure:"host" json:"host" yaml:"host"`
 	Port         string `mapstructure:"port" json:"port" yaml:"port"`
 	Username     string `mapstructure:"username" json:"username" yaml:"username"`
 	Password     string `mapstructure:"password" json:"password" yaml:"password"`
@@ -45,6 +45,7 @@ type ModGormDb struct {
 	LogMode      string `mapstructure:"logMode" json:"logMode" yaml:"logMode"`
 	LogZap       bool   `mapstructure:"logZap" json:"logZap" yaml:"logZap"`
 	Dsn          string
+	ShowSQL      bool
 }
 
 func (ModGormDb) WeaverMarshal(*codegen.Encoder)   {}
@@ -54,7 +55,7 @@ func (m *ModGormDb) SetDsn() {
 	m.Dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?%s",
 		m.Username,
 		m.Password,
-		m.Ip,
+		m.Host,
 		m.Port,
 		m.Dbname,
 		m.Config,

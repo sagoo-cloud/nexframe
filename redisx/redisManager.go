@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	"github.com/sagoo-cloud/nexframe/nf/configs"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"log"
 	"strings"

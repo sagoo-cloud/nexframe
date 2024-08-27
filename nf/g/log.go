@@ -3,7 +3,7 @@ package g
 import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
-	"github.com/sagoo-cloud/nexframe/nf/configs"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/zlog"
 )
 
