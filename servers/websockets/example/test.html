@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #messages { border: 1px solid #ddd; padding: 10px; height: 300px; overflow-y: scroll; margin-bottom: 10px; }
+        #messageInput { width: 70%; padding: 5px; }
+        #sendButton { padding: 5px 10px; }
+    </style>
+</head>
+<body>
+<h1>WebSocket 测试</h1>
+<div id="messages"></div>
+<input type="text" id="messageInput" placeholder="输入消息">
+<button id="sendButton">发送</button>
+
+<script>
+    const messagesDiv = document.getElementById('messages');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+
+    let socket = new WebSocket("ws://localhost:8080/ws");
+
+    socket.onopen = function(e) {
+        addMessage("连接已建立");
+    };
+
+    socket.onmessage = function(event) {
+        const response = JSON.parse(event.data);
+        addMessage(`服务器: ${JSON.stringify(response)}`);
+    };
+
+    socket.onclose = function(event) {
+        if (event.wasClean) {
+            addMessage(`连接已关闭，代码=${event.code} 原因=${event.reason}`);
+        } else {
+            addMessage('连接已断开');
+        }
+    };
+
+    socket.onerror = function(error) {
+        addMessage(`错误: ${error.message}`);
+    };
+
+    sendButton.onclick = function() {
+        const message = messageInput.value;
+        const payload = {
+            Route: "echo",
+            Params: {
+                message: message
+            }
+        };
+        socket.send(JSON.stringify(payload));
+        addMessage(`你: ${JSON.stringify(payload)}`);
+        messageInput.value = '';
+    };
+
+    function addMessage(message) {
+        const messageElement = document.createElement('div');
+        messageElement.textContent = message;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+</script>
+</body>
+</html>
