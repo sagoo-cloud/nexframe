@@ -1,4 +1,4 @@
-package paging
+package database
 
 import (
 	"gorm.io/gen/field"

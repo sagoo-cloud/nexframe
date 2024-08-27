@@ -1,4 +1,4 @@
-package response
+package contracts
 
 import (
 	"encoding/json"
