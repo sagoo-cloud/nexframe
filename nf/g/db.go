@@ -2,7 +2,7 @@ package g
 
 import (
 	"github.com/sagoo-cloud/nexframe/database"
-	"github.com/sagoo-cloud/nexframe/nf/config"
+	"github.com/sagoo-cloud/nexframe/nf/configs"
 	"gorm.io/gorm"
 )
 
@@ -24,8 +24,8 @@ func init() {
 	DB = dbm.GetDB()
 }
 
-func getDefaultConfig() config.ModGormDb {
-	var config config.ModSwaConfig
+func getDefaultConfig() configs.ModGormDb {
+	var config configs.ModSwaConfig
 	if err := Cfg().GetConfig().Unmarshal(&config); err != nil {
 		Log().Error("数据库配置文件解析失败", error.Error(err))
 	}

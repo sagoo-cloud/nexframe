@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	"github.com/sagoo-cloud/nexframe/nf/config"
+	"github.com/sagoo-cloud/nexframe/nf/configs"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"log"
 	"strings"
@@ -59,7 +59,7 @@ type DataProcessor func(data string)
 // DB 用于全局获取RedisManager实例
 func DB() *RedisManager {
 	once.Do(func() {
-		cfg := config.GetInstance()
+		cfg := configs.GetInstance()
 		// 从配置文件获取redis的ip以及db
 		mode := cfg.GetString("redis.default.mode", "single")
 		sentinelMasterName := cfg.GetString("redis.default.sentinelMasterName", "sagoo-master")

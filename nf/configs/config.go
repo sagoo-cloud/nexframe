@@ -1,19 +1,33 @@
-package config
+package configs
 
 import (
 	"fmt"
+	"github.com/sagoo-cloud/nexframe/args"
 	"github.com/spf13/viper"
+	"strings"
 	"sync"
 	"time"
 )
 
+var cfg *config
+
+type config struct {
+	*viper.Viper
+}
+
 func init() {
-	getSystemConfig()
+	m := strings.Split(args.Config, ",")
+	switch m[0] {
+	case "consul":
+		break
+	default:
+		cfg = loadFromToml(m[0])
+	}
 }
 
 // ConfigEntity 表示需要全局调用的实体对象
 type ConfigEntity struct {
-	config *viper.Viper
+	config *config
 }
 
 var (
@@ -25,32 +39,31 @@ var (
 func GetInstance() *ConfigEntity {
 	once.Do(func() {
 		instance = &ConfigEntity{
-			config: getSystemConfig(),
+			config: loadFromToml(),
 		}
 	})
 	return instance
 }
 
-func getSystemConfig() *viper.Viper {
-	v := viper.New()
-	v.SetConfigName("config")
-	v.SetConfigType("toml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("./config")
-	v.AddConfigPath("../../config")
+func loadFromToml(fileName ...string) *config {
+	c := &config{}
+	c.Viper = viper.New()
+	c.SetConfigName("config")
+	c.AddConfigPath(".")
+	c.AddConfigPath("../")
+	c.AddConfigPath("../../")
+	c.AddConfigPath("./config/")
+	c.AddConfigPath("../config/")
+	c.SetConfigType("toml")
 
-	err := v.ReadInConfig()
-	if err != nil {
+	if err := c.ReadInConfig(); err != nil {
 		fmt.Errorf("读取config.toml配置文件失败: %s \n", err)
 		return nil
 	}
-
-	v.WatchConfig()
-
-	return v
+	return c
 }
 func (c *ConfigEntity) GetConfig() *viper.Viper {
-	return GetInstance().config
+	return GetInstance().config.Viper
 }
 
 // Get 获取interface{}类型配置

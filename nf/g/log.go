@@ -3,7 +3,7 @@ package g
 import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
-	"github.com/sagoo-cloud/nexframe/nf/config"
+	"github.com/sagoo-cloud/nexframe/nf/configs"
 	"github.com/sagoo-cloud/nexframe/zlog"
 )
 
@@ -19,7 +19,7 @@ func Log(name ...string) zlog.Logger {
 }
 
 func getLogConfig() zlog.LogConfig {
-	var swaConfig config.ModSwaConfig
+	var swaConfig configs.ModSwaConfig
 	v := Cfg().GetConfig()
 	if v == nil {
 		return zlog.LogConfig{}
