@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"sync"
 	"time"
 )
@@ -15,7 +16,7 @@ type CacheManager struct {
 }
 
 // NewCacheManager 创建 CacheManager 实例
-func NewCacheManager(config *Config) *CacheManager {
+func NewCacheManager(config *configs.CacheConfig) *CacheManager {
 	cm := &CacheManager{
 		memoryCache: NewFreeCache(config.MemoryCacheSize),
 		redisCache:  NewRedisCache(config),

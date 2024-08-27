@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/redisx"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ type RedisCache struct {
 }
 
 // NewRedisCache 创建 RedisCache 实例
-func NewRedisCache(config *Config) *RedisCache {
+func NewRedisCache(config *configs.CacheConfig) *RedisCache {
 
 	client := redisx.DB().GetClient()
 
