@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/redis/go-redis/v9"
-	"github.com/sagoo-cloud/nexframe/redisx"
 	"sync"
 
 	"github.com/sagoo-cloud/nexframe/queue"
@@ -22,7 +21,7 @@ type RedisQueue struct {
 
 // newRedisQueue 创建一个新的 RedisQueue 实例
 func newRedisQueue(diName string) queue.Queue {
-	client := redisx.DB().GetClient() // 假设这个函数存在并返回正确的 Redis 客户端
+	client := redisdb.DB().GetClient() // 假设这个函数存在并返回正确的 Redis 客户端
 	return &RedisQueue{client: client}
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/sagoo-cloud/nexframe/configs"
-	"github.com/sagoo-cloud/nexframe/redisx"
+	"github.com/sagoo-cloud/nexframe/database/redisdb"
 	"strings"
 	"time"
 )
@@ -23,7 +23,7 @@ type RedisCache struct {
 // NewRedisCache 创建 RedisCache 实例
 func NewRedisCache(config *configs.CacheConfig) *RedisCache {
 
-	client := redisx.DB().GetClient()
+	client := redisdb.DB().GetClient()
 
 	// 启用键空间通知
 	client.ConfigSet(ctx, "notify-keyspace-events", "Ex")
@@ -32,7 +32,7 @@ func NewRedisCache(config *configs.CacheConfig) *RedisCache {
 		client: client,
 		stats:  NewCacheStats(),
 		prefix: config.RedisPrefix,
-		dbname: redisx.DB().GetDbname(),
+		dbname: redisdb.DB().GetDbname(),
 	}
 }
 
