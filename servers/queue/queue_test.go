@@ -3,9 +3,9 @@ package queue_test
 import (
 	"context"
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/queue"
-	"github.com/sagoo-cloud/nexframe/queue/redisqueue"
-	"github.com/sagoo-cloud/nexframe/queue/rocketqueue"
+	"github.com/sagoo-cloud/nexframe/servers/queue"
+	"github.com/sagoo-cloud/nexframe/servers/queue/redisqueue"
+	"github.com/sagoo-cloud/nexframe/servers/queue/rocketqueue"
 	"sync"
 	"testing"
 )

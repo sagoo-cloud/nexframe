@@ -13,7 +13,7 @@ import (
 	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"github.com/apache/rocketmq-client-go/v2/producer"
-	"github.com/sagoo-cloud/nexframe/queue"
+	"github.com/sagoo-cloud/nexframe/servers/queue"
 )
 
 var (

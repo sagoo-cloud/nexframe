@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"github.com/redis/go-redis/v9"
+	"github.com/sagoo-cloud/nexframe/database/redisdb"
 	"sync"
 
-	"github.com/sagoo-cloud/nexframe/queue"
+	"github.com/sagoo-cloud/nexframe/servers/queue"
 )
 
 var (
