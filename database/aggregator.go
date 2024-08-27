@@ -1,4 +1,4 @@
-package channelx
+package database
 
 import (
 	"errors"
