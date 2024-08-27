@@ -73,7 +73,11 @@ func (rc *RedisCache) GetStats() (float64, float64) {
 
 // SubscribeExpiryEvents 订阅 Redis 键过期事件
 func (rc *RedisCache) SubscribeExpiryEvents(callback func(string)) {
-	pubsub := rc.client.PSubscribe(ctx, fmt.Sprintf("__keyevent@%d__:expired", rc.dbname))
+	dbname := "0"
+	if rc.dbname != "" {
+		dbname = rc.dbname
+	}
+	pubsub := rc.client.PSubscribe(ctx, fmt.Sprintf("__keyevent@%s__:expired", dbname))
 
 	go func() {
 		for msg := range pubsub.Channel() {

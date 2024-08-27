@@ -2,12 +2,13 @@ package cache
 
 import (
 	"fmt"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"sync"
 	"testing"
 	"time"
 )
 
-var testConfig = &Config{
+var testConfig = &configs.CacheConfig{
 	MemoryCacheSize: 10 * 1024 * 1024, // 10MB
 	RedisAddr:       "localhost:6379",
 	RedisPassword:   "",
@@ -124,7 +125,7 @@ func TestConcurrency(t *testing.T) {
 
 func TestErrorHandling(t *testing.T) {
 	// 创建一个带有错误的 Redis 地址的配置
-	badConfig := &Config{
+	badConfig := &configs.CacheConfig{
 		MemoryCacheSize: 10 * 1024 * 1024,
 		RedisAddr:       "localhost:6380", // 假设这是一个错误的地址
 		RedisPassword:   "",
