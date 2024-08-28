@@ -1,8 +1,8 @@
 package g
 
 import (
-	"github.com/sagoo-cloud/nexframe/cache"
 	"github.com/sagoo-cloud/nexframe/configs"
+	"github.com/sagoo-cloud/nexframe/os/cache"
 	"sync"
 )
 

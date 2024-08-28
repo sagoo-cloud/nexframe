@@ -1,6 +1,6 @@
 package utils
 
-import "github.com/sagoo-cloud/nexframe/command"
+import "github.com/sagoo-cloud/nexframe/os/command"
 
 const (
 	// Debug key for checking if in debug mode.

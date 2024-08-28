@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/sagoo-cloud/nexframe/encoding/gbinary"
+	"github.com/sagoo-cloud/nexframe/os/zlog/intlog"
 	"github.com/sagoo-cloud/nexframe/utils/reflection"
-	"github.com/sagoo-cloud/nexframe/zlog/intlog"
 	"math"
 	"reflect"
 )

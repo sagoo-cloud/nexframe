@@ -2,7 +2,7 @@
 package errors
 
 import (
-	"github.com/sagoo-cloud/nexframe/command"
+	"github.com/sagoo-cloud/nexframe/os/command"
 )
 
 // StackMode is the mode that printing stack information in StackModeBrief or StackModeDetail mode.

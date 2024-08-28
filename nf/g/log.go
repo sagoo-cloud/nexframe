@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sagoo-cloud/nexframe/configs"
-	"github.com/sagoo-cloud/nexframe/zlog"
+	"github.com/sagoo-cloud/nexframe/os/zlog"
 )
 
 var logger zlog.Logger

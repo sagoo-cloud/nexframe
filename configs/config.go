@@ -1,7 +1,7 @@
 package configs
 
 import (
-	"github.com/sagoo-cloud/nexframe/command/args"
+	"github.com/sagoo-cloud/nexframe/os/command/args"
 	"github.com/spf13/viper"
 	"strings"
 	"sync"

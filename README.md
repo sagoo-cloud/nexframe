@@ -38,12 +38,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/nf"
+	"github.com/sagoo-cloud/nexframe"
 	"net/http"
 )
 
 func main() {
-	server := nf.NewAPIFramework()
+	server := nexframe.Server()
 	// 注册控制器
 	err := server.BindHandlerFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(w, "Hello, world!")
