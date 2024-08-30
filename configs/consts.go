@@ -38,8 +38,8 @@ const (
 	LogPattern          = "log.pattern"
 	LogOutput           = "log.output"
 	LogRotateFile       = "log.rotate.file"
-	LogRotateMaxSize    = "log.rotate.max_size"
-	LogRotateMaxBackups = "log.rotate.max_backups"
-	LogRotateMaxAge     = "log.rotate.max_age"
+	LogRotateMaxSize    = "log.rotate.maxSize"
+	LogRotateMaxBackups = "log.rotate.maxBackups"
+	LogRotateMaxAge     = "log.rotate.maxAge"
 	LogRotateCompress   = "log.rotate.compress"
 )
