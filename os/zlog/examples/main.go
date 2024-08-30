@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/sagoo-cloud/nexframe/zlog"
+	"github.com/sagoo-cloud/nexframe/configs"
+	"github.com/sagoo-cloud/nexframe/os/zlog"
 	"time"
 )
 
@@ -18,7 +19,7 @@ func main() {
 	logger.Debug("This debug message should not appear in production mode")
 
 	// 修改日志配置为开发模式
-	devConfig := zlog.LogConfig{
+	devConfig := configs.LogConfig{
 		Level:   "trace",
 		Pattern: "development",
 		Output:  "stdout",
@@ -39,7 +40,7 @@ func main() {
 	logger.Info("User action", "user_id", 12345, "action", "login", "timestamp", time.Now().Unix())
 
 	// 切换回生产模式
-	prodConfig := zlog.LogConfig{
+	prodConfig := configs.LogConfig{
 		Level:   "info",
 		Pattern: "production",
 		Output:  "stdout",

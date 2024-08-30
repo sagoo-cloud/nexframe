@@ -3,7 +3,7 @@ package httputil
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,9 +14,9 @@ import (
 
 // TestNewGetRequest 测试创建 GET 请求
 func TestNewGetRequest(t *testing.T) {
-	url := "http://baidu.com"
+	urlStr := "http://baidu.com"
 	params := map[string]interface{}{"key": "value"}
-	req, err := NewGetRequest(url, params)
+	req, err := NewGetRequest(urlStr, params)
 	if err != nil {
 		t.Fatalf("NewGetRequest failed: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestNewFormPostRequest(t *testing.T) {
 	}
 
 	// 读取请求体
-	body, err := ioutil.ReadAll(req.Body)
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		t.Fatalf("Failed to read request body: %v", err)
 	}
@@ -83,9 +83,9 @@ func TestNewFormPostRequest(t *testing.T) {
 
 // TestNewJSONPostRequest 测试创建 JSON POST 请求
 func TestNewJSONPostRequest(t *testing.T) {
-	url := "http://example.com"
+	urlStr := "http://example.com"
 	params := map[string]interface{}{"key": "value"}
-	req, err := NewJSONPostRequest(url, params)
+	req, err := NewJSONPostRequest(urlStr, params)
 	if err != nil {
 		t.Fatalf("NewJSONPostRequest failed: %v", err)
 	}

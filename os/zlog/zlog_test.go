@@ -1,6 +1,9 @@
 package zlog
 
-import "testing"
+import (
+	"github.com/sagoo-cloud/nexframe/configs"
+	"testing"
+)
 
 func TestLoggerImpl(t *testing.T) {
 	logger := GetLogger()
@@ -9,11 +12,11 @@ func TestLoggerImpl(t *testing.T) {
 	logger.Info("This is an info message with default config")
 
 	// 修改配置
-	newConfig := LogConfig{
+	newConfig := configs.LogConfig{
 		Level:   "debug",
 		Pattern: "development",
 		Output:  "file",
-		LogRotate: LogRotate{
+		LogRotate: configs.LogRotate{
 			Filename: "app.log",
 			MaxSize:  50,
 		},

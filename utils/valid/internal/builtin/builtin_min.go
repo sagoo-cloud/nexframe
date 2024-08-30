@@ -27,11 +27,11 @@ func (r RuleMin) Message() string {
 
 func (r RuleMin) Run(in RunInput) error {
 	var (
-		min, err1    = strconv.ParseFloat(in.RulePattern, 10)
+		minL, err1   = strconv.ParseFloat(in.RulePattern, 10)
 		valueN, err2 = strconv.ParseFloat(convert.String(in.Value), 10)
 	)
-	if valueN < min || err1 != nil || err2 != nil {
-		return errors.New(gstr.Replace(in.Message, "{min}", strconv.FormatFloat(min, 'f', -1, 64)))
+	if valueN < minL || err1 != nil || err2 != nil {
+		return errors.New(gstr.Replace(in.Message, "{min}", strconv.FormatFloat(minL, 'f', -1, 64)))
 	}
 	return nil
 }

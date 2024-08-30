@@ -2,6 +2,7 @@ package file
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -177,8 +178,8 @@ func colorEquals(c1, c2 color.Color) bool {
 }
 func createTestImage() image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
-	blue := color.RGBA{0, 0, 255, 255}
-	draw.Draw(img, img.Bounds(), &image.Uniform{blue}, image.ZP, draw.Src)
+	blue := color.RGBA{B: 255, A: 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: blue}, image.Point{}, draw.Src)
 	return img
 }
 
@@ -194,8 +195,8 @@ func createTestGIF() image.Image {
 
 func createTestWatermark(path string) {
 	img := image.NewRGBA(image.Rect(0, 0, 50, 50))
-	red := color.RGBA{255, 0, 0, 128}
-	draw.Draw(img, img.Bounds(), &image.Uniform{red}, image.ZP, draw.Src)
+	red := color.RGBA{R: 255, A: 128}
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: red}, image.Point{}, draw.Src)
 	f, _ := os.Create(path)
 	defer f.Close()
 	png.Encode(f, img)
@@ -224,7 +225,7 @@ func TestIsAllowedExt(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.ext, func(t *testing.T) {
 			result := handler.isAllowedExt(tc.ext)
-			if result != tc.expected {
+			if !errors.Is(result, tc.expected) {
 				t.Errorf("For extension %s, expected %v but got %v", tc.ext, tc.expected, result)
 			}
 		})

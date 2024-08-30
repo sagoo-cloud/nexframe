@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/sagoo-cloud/nexframe/zlog"
+	"github.com/sagoo-cloud/nexframe/os/zlog"
 	"net/http"
 	"os"
 

@@ -8,8 +8,8 @@ var (
 	CommitID     string
 )
 
-var copyright string = "Liaoning Sagoo Cloud Technology Co.,Ltd"
-var logoInfo string = "   _____                         \n  / ____|                        \n | (___   __ _  __ _  ___   ___  \n  \\___ \\ / _` |/ _` |/ _ \\ / _ \\ \n  ____) | (_| | (_| | (_) | (_) |\n |_____/ \\__,_|\\__, |\\___/ \\___/ \n                __/ |            \n               |___/             "
+var copyright = "Liaoning Sagoo Cloud Technology Co.,Ltd"
+var logoInfo = "   _____                         \n  / ____|                        \n | (___   __ _  __ _  ___   ___  \n  \\___ \\ / _` |/ _` |/ _ \\ / _ \\ \n  ____) | (_| | (_| | (_) | (_) |\n |_____/ \\__,_|\\__, |\\___/ \\___/ \n                __/ |            \n               |___/             "
 
 func ShowLogo(buildVersion, buildTime, commitID string) {
 	BuildVersion = buildVersion

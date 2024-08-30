@@ -48,10 +48,10 @@ type ModGormDb struct {
 	ShowSQL      bool
 }
 
-func (ModGormDb) WeaverMarshal(*codegen.Encoder)   {}
-func (ModGormDb) WeaverUnmarshal(*codegen.Decoder) {}
+func (m ModGormDb) WeaverMarshal(*codegen.Encoder)   {}
+func (m ModGormDb) WeaverUnmarshal(*codegen.Decoder) {}
 
-func (m *ModGormDb) SetDsn() {
+func (m ModGormDb) SetDsn() {
 	m.Dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?%s",
 		m.Username,
 		m.Password,

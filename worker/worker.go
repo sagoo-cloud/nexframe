@@ -11,8 +11,8 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/os/nx"
 	"github.com/sagoo-cloud/nexframe/utils/guid"
-	"github.com/sagoo-cloud/nexframe/utils/nx"
 	"io"
 	"net/http"
 	"strings"
@@ -211,7 +211,7 @@ func New(options ...func(*Options)) *Worker {
 			mux.Handle(ops.group, h)
 
 			if err := srv.Run(mux); err != nil {
-				g.Log().Debugf(context.Background(), "running task handler failed: ", err)
+				g.Log().Debugf(context.Background(), "running task handler failed: %v", err)
 			}
 		}()
 
@@ -228,7 +228,7 @@ func New(options ...func(*Options)) *Worker {
 			var h periodTaskHandler
 			h.tk = *worker
 			if err := srv.Run(h); err != nil {
-				g.Log().Debugf(context.Background(), "running task handler failed: ", err)
+				g.Log().Debugf(context.Background(), "running task handler failed: %v", err)
 			}
 		}()
 	}
@@ -537,9 +537,9 @@ func getNext(expr string, timestamp int64) (next int64, err error) {
 	if err != nil {
 		return
 	}
-	t := carbon.Now().ToStdTime()
+	t := carbon.Now().StdTime()
 	if timestamp > 0 {
-		t = carbon.CreateFromTimestamp(timestamp).ToStdTime()
+		t = carbon.CreateFromTimestamp(timestamp).StdTime()
 	}
 	next = e.Next(t).Unix()
 	return

@@ -89,6 +89,9 @@ func TestMaxConnections(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected connection to fail, but it succeeded")
 	}
+	if resp == nil {
+		t.Fatalf("Expected response to be non-nil")
+	}
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("Expected status 503, got %d", resp.StatusCode)
 	}

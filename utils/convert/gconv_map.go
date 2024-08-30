@@ -354,8 +354,8 @@ func doMapConvertForMapOrStructValue(in doMapConvertForMapOrStructValueInput) in
 			}
 			mapKey = ""
 			fieldTag := rtField.Tag
-			for _, tag := range in.Option.Tags {
-				if mapKey = fieldTag.Get(tag); mapKey != "" {
+			for _, tagValue := range in.Option.Tags {
+				if mapKey = fieldTag.Get(tagValue); mapKey != "" {
 					break
 				}
 			}
@@ -521,6 +521,8 @@ func doMapConvertForMapOrStructValue(in doMapConvertForMapOrStructValueInput) in
 			})
 		}
 		return array
+	default:
+
 	}
 	return in.Value
 }

@@ -138,7 +138,7 @@ func GetQuarterDay() (start, end string) {
 	defer putTimeToPool(startTime)
 	defer putTimeToPool(endTime)
 
-	*startTime = time.Date(now.Year(), time.Month((currentQuarter-1)*3+1), 1, 0, 0, 0, 0, time.Local)
+	*startTime = time.Date(now.Year(), (currentQuarter-1)*3+1, 1, 0, 0, 0, 0, time.Local)
 	*endTime = startTime.AddDate(0, 3, -1)
 
 	startBuf := getBufferFromPool()

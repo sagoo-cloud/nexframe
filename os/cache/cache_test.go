@@ -10,10 +10,11 @@ import (
 
 var testConfig = &configs.CacheConfig{
 	MemoryCacheSize: 10 * 1024 * 1024, // 10MB
-	RedisAddr:       "localhost:6379",
-	RedisPassword:   "",
-	RedisDB:         0,
-	RedisPrefix:     "test:",
+	RedisConfig: configs.RedisConfig{
+		Addr:        "localhost:6379",
+		Db:          0,
+		RedisPrefix: "SagooCache:",
+	},
 }
 
 func TestSetAndGet(t *testing.T) {
@@ -127,10 +128,11 @@ func TestErrorHandling(t *testing.T) {
 	// 创建一个带有错误的 Redis 地址的配置
 	badConfig := &configs.CacheConfig{
 		MemoryCacheSize: 10 * 1024 * 1024,
-		RedisAddr:       "localhost:6380", // 假设这是一个错误的地址
-		RedisPassword:   "",
-		RedisDB:         0,
-		RedisPrefix:     "test:",
+		RedisConfig: configs.RedisConfig{
+			Addr:        "localhost:6379",
+			Db:          0,
+			RedisPrefix: "SagooCache:",
+		},
 	}
 
 	cm := NewCacheManager(badConfig)

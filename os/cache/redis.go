@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/sagoo-cloud/nexframe/configs"
@@ -51,7 +52,7 @@ func (rc *RedisCache) Set(key string, value []byte, ttl time.Duration) error {
 func (rc *RedisCache) Get(key string) ([]byte, bool, error) {
 	rc.stats.IncrementRequestCount()
 	value, err := rc.client.Get(ctx, rc.keyWithPrefix(key)).Bytes()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, false, nil
 	}
 	if err != nil {

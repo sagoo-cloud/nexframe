@@ -168,8 +168,8 @@ func (fh *FileHandler) Upload(field string, r *http.Request) ([]UploadResult, er
 		wg.Add(1)
 		go func(i int, head *multipart.FileHeader) {
 			defer wg.Done()
-			path, err := fh.moveFile(head)
-			results[i] = UploadResult{Filename: path, Error: err}
+			filePath, err := fh.moveFile(head)
+			results[i] = UploadResult{Filename: filePath, Error: err}
 		}(i, head)
 	}
 

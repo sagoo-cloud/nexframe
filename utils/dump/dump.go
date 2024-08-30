@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/gstructs"
 	"github.com/sagoo-cloud/nexframe/utils"
+	"github.com/sagoo-cloud/nexframe/utils/gstructs"
 	"io"
 	"reflect"
 

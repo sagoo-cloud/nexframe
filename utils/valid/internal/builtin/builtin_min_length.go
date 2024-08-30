@@ -31,9 +31,9 @@ func (r RuleMinLength) Run(in RunInput) error {
 		valueRunes = convert.Runes(in.Value)
 		valueLen   = len(valueRunes)
 	)
-	min, err := strconv.Atoi(in.RulePattern)
-	if valueLen < min || err != nil {
-		return errors.New(gstr.Replace(in.Message, "{min}", strconv.Itoa(min)))
+	minL, err := strconv.Atoi(in.RulePattern)
+	if valueLen < minL || err != nil {
+		return errors.New(gstr.Replace(in.Message, "{min}", strconv.Itoa(minL)))
 	}
 	return nil
 }

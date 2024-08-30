@@ -33,24 +33,24 @@ func (r RuleLength) Run(in RunInput) error {
 		valueLen   = len(valueRunes)
 	)
 	var (
-		min   = 0
-		max   = 0
+		minL  = 0
+		maxL  = 0
 		array = strings.Split(in.RulePattern, ",")
 	)
 	if len(array) > 0 {
 		if v, err := strconv.Atoi(strings.TrimSpace(array[0])); err == nil {
-			min = v
+			minL = v
 		}
 	}
 	if len(array) > 1 {
 		if v, err := strconv.Atoi(strings.TrimSpace(array[1])); err == nil {
-			max = v
+			maxL = v
 		}
 	}
-	if valueLen < min || valueLen > max {
+	if valueLen < minL || valueLen > maxL {
 		return errors.New(utils.ReplaceByMap(in.Message, map[string]string{
-			"{min}": strconv.Itoa(min),
-			"{max}": strconv.Itoa(max),
+			"{min}": strconv.Itoa(minL),
+			"{max}": strconv.Itoa(maxL),
 		}))
 	}
 	return nil

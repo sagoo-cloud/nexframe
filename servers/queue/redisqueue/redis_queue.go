@@ -51,7 +51,7 @@ func (m *RedisQueue) Enqueue(ctx context.Context, key string, message string) (b
 // Dequeue 实现了 Queue 接口的 Dequeue 方法
 func (m *RedisQueue) Dequeue(ctx context.Context, key string) (message string, tag string, token string, dequeueCount int64, err error) {
 	message, err = m.client.LPop(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		err = nil
 		message = ""
 	}

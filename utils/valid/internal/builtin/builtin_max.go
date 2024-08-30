@@ -27,11 +27,11 @@ func (r RuleMax) Message() string {
 
 func (r RuleMax) Run(in RunInput) error {
 	var (
-		max, err1    = strconv.ParseFloat(in.RulePattern, 10)
+		maxL, err1   = strconv.ParseFloat(in.RulePattern, 10)
 		valueN, err2 = strconv.ParseFloat(convert.String(in.Value), 10)
 	)
-	if valueN > max || err1 != nil || err2 != nil {
-		return errors.New(gstr.Replace(in.Message, "{max}", strconv.FormatFloat(max, 'f', -1, 64)))
+	if valueN > maxL || err1 != nil || err2 != nil {
+		return errors.New(gstr.Replace(in.Message, "{max}", strconv.FormatFloat(maxL, 'f', -1, 64)))
 	}
 	return nil
 }

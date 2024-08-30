@@ -87,7 +87,7 @@ func ValidateStruct(s interface{}) error {
 					continue
 				}
 
-				var fieldValue any = field.Interface()
+				var fieldValue = field.Interface()
 				runInput := builtin.RunInput{
 					RuleKey:     ruleName,
 					RulePattern: rulePattern,

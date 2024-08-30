@@ -2,7 +2,6 @@ package i18n
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +34,7 @@ func cleanupTestEnvironment() {
 func createTestTranslationFile(lang string, translations map[string]string) {
 	data, _ := json.Marshal(translations)
 	os.MkdirAll("./config/lang", 0755)
-	ioutil.WriteFile(filepath.Join("./config/lang", lang+".json"), data, 0644)
+	os.WriteFile(filepath.Join("./config/lang", lang+".json"), data, 0644)
 }
 
 func TestInitGlobal(t *testing.T) {

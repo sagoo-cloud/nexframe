@@ -31,9 +31,9 @@ func (r RuleMaxLength) Run(in RunInput) error {
 		valueRunes = convert.Runes(in.Value)
 		valueLen   = len(valueRunes)
 	)
-	max, err := strconv.Atoi(in.RulePattern)
-	if valueLen > max || err != nil {
-		return errors.New(gstr.Replace(in.Message, "{max}", strconv.Itoa(max)))
+	maxL, err := strconv.Atoi(in.RulePattern)
+	if valueLen > maxL || err != nil {
+		return errors.New(gstr.Replace(in.Message, "{max}", strconv.Itoa(maxL)))
 	}
 	return nil
 }

@@ -38,7 +38,7 @@ func TestGo(t *testing.T) {
 		)
 
 		wg.Wait()
-		if capturedErr != expectedErr {
+		if !errors.Is(capturedErr, expectedErr) {
 			t.Errorf("Expected error %v, got %v", expectedErr, capturedErr)
 		}
 	})

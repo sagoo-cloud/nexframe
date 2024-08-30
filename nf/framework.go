@@ -245,13 +245,13 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 
 // extractMeta 从字段标签中提取元数据
 func extractMeta(tag reflect.StructTag) map[string]string {
-	meta := make(map[string]string)
+	metaData := make(map[string]string)
 	for _, key := range []string{"path", "method", "summary", "tags"} {
 		if value := tag.Get(key); value != "" {
-			meta[key] = value
+			metaData[key] = value
 		}
 	}
-	return meta
+	return metaData
 }
 
 // injectDependencies 注入依赖（包括框架和 ServiceWeaver 上下文）

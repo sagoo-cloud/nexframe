@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -115,7 +115,7 @@ func TestSocketeerManager_main(t *testing.T) {
 	serverWithCustomHandler := httptest.NewServer(BootStrapRouterWithCustomHandler(&MockHandlerObject))
 	t.Run("Runs onConnect Function ( set by handlers )", func(t *testing.T) {
 		ConnectToTestServer(t, serverWithCustomHandler)
-		connectionMessage, _ := ioutil.ReadAll(MockHandlerObject.ConnectBuffer)
+		connectionMessage, _ := io.ReadAll(MockHandlerObject.ConnectBuffer)
 		assert.True(t, string(connectionMessage) == "[Connected]")
 	})
 
@@ -128,7 +128,7 @@ func TestSocketeerManager_main(t *testing.T) {
 
 	t.Run("Runs onConnect Function ", func(t *testing.T) {
 		ConnectToTestServer(t, serverWithoutCustomHandler)
-		connectionMessage, _ := ioutil.ReadAll(MockBuffer.ConnectBuffer)
+		connectionMessage, _ := io.ReadAll(MockBuffer.ConnectBuffer)
 		assert.True(t, len(connectionMessage) != 0)
 	})
 

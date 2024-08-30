@@ -2,6 +2,7 @@ package gpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -50,7 +51,7 @@ func TestGo(t *testing.T) {
 	t.Logf("Completed jobs: %d", completedJobCount)
 	t.Logf("Final running goroutine count: %d", pool.RunningCount())
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		t.Log("Test terminated due to timeout")
 	}
 }
@@ -90,7 +91,7 @@ func TestAddJob(t *testing.T) {
 	t.Logf("Completed jobs: %d", completedJobCount)
 	t.Logf("Final running goroutine count: %d", pool.RunningCount())
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		t.Log("Test terminated due to timeout")
 	}
 }

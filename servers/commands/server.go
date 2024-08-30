@@ -3,7 +3,7 @@ package commands
 import (
 	"context"
 	"errors"
-	"github.com/sagoo-cloud/nexframe/command/args"
+	"github.com/sagoo-cloud/nexframe/os/command/args"
 	"github.com/sagoo-cloud/nexframe/servers/commons"
 	"log/slog"
 )
