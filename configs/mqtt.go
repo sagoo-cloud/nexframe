@@ -1,5 +1,15 @@
 package configs
 
+const (
+	MqttHost         = "mqtt.host"
+	MattUsername     = "mqtt.username"
+	MqttPassword     = "mqtt.password"
+	MqttClientID     = "mqtt.client_id"
+	MqttParallel     = "mqtt.parallel"
+	MqttSubscribeQos = "mqtt.subscribe_qos"
+	MqttPublishQos   = "mqtt.publish_qos"
+)
+
 type MqttConfig struct {
 	Host         string `json:"host"`
 	UserName     string `json:"user_name"`
@@ -12,13 +22,13 @@ type MqttConfig struct {
 
 func LoadMqttConfig() *MqttConfig {
 	config := &MqttConfig{
-		Host:         EnvString("mqtt.host", "tcp://127.0.0.1:1883"),
-		UserName:     EnvString("mqtt.username", ""),
-		PassWord:     EnvString("mqtt.password", ""),
-		ClientID:     EnvString("mqtt.client_id", "211"),
-		Parallel:     EnvBool("mqtt.parallel", false),
-		SubscribeQos: uint8(EnvInt("mqtt.subscribe_qos", 2)),
-		PublishQos:   uint8(EnvInt("mqtt.publish_qos", 2)),
+		Host:         EnvString(MqttHost, "tcp://127.0.0.1:1883"),
+		UserName:     EnvString(MattUsername, ""),
+		PassWord:     EnvString(MqttPassword, ""),
+		ClientID:     EnvString(MqttClientID, "211"),
+		Parallel:     EnvBool(MqttParallel, false),
+		SubscribeQos: uint8(EnvInt(MqttSubscribeQos, 2)),
+		PublishQos:   uint8(EnvInt(MqttPublishQos, 2)),
 	}
 	return config
 }

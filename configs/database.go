@@ -5,19 +5,6 @@ import (
 	"github.com/sagoo-cloud/nexframe/os/command/args"
 )
 
-const (
-	DatabaseDriver       = "database.driver"
-	DatabaseHost         = "database.host"
-	DatabasePort         = "database.port"
-	DatabaseUserName     = "database.username"
-	DatabasePassword     = "database.password"
-	DatabaseDbName       = "database.dbName"
-	DatabaseConfig       = "database.config"
-	DatabaseMaxIdleConns = "database.maxIdleConns"
-	DatabaseMaxOpenConns = "database.maxOpenConns"
-	DatabaseShowSQL      = "database.showSql"
-)
-
 func LoadDatabaseConfig() *ModGormDb {
 	driver := EnvString(DatabaseDriver, "mysql")
 	dataSource := fmt.Sprintf(

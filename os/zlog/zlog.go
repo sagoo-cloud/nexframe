@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/sagoo-cloud/nexframe/configs"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
@@ -15,36 +16,6 @@ const (
 	development = "dev"
 	production  = "prod"
 )
-
-// LogConfig holds the configuration for the logger
-type LogConfig struct {
-	Level     string    `yaml:"Level"`
-	Pattern   string    `yaml:"Pattern"`
-	Output    string    `yaml:"Output"`
-	LogRotate LogRotate `yaml:"LogRotate"`
-}
-
-// LogRotate holds the configuration for log rotation
-type LogRotate struct {
-	Filename   string `yaml:"Filename"`
-	MaxSize    int    `yaml:"MaxSize"`
-	MaxBackups int    `yaml:"MaxBackups"`
-	MaxAge     int    `yaml:"MaxAge"`
-	Compress   bool   `yaml:"Compress"`
-}
-
-var DefaultConfig = LogConfig{
-	Level:   "debug",
-	Pattern: production,
-	Output:  "stdout",
-	LogRotate: LogRotate{
-		Filename:   "app.log",
-		MaxSize:    100,
-		MaxBackups: 3,
-		MaxAge:     7,
-		Compress:   true,
-	},
-}
 
 // Logger interface defines the logging methods
 type Logger interface {
@@ -64,8 +35,8 @@ type Logger interface {
 	Fatalf(ctx context.Context, format string, args ...interface{})
 	Panicf(ctx context.Context, format string, args ...interface{})
 
-	SetConfig(config LogConfig)
-	GetConfig() LogConfig
+	SetConfig(config configs.LogConfig)
+	GetConfig() configs.LogConfig
 	IsTraceEnabled() bool
 	IsDebugEnabled() bool
 	IsInfoEnabled() bool
@@ -77,7 +48,7 @@ type Logger interface {
 
 type loggerImpl struct {
 	zl             zerolog.Logger
-	config         LogConfig
+	config         configs.LogConfig
 	isTraceEnabled bool
 	isDebugEnabled bool
 	isInfoEnabled  bool
@@ -98,7 +69,7 @@ var (
 func GetLogger() Logger {
 	once.Do(func() {
 		globalLogger = &loggerImpl{
-			config: DefaultConfig,
+			config: configs.LoadLogConfig(),
 		}
 		globalLogger.init()
 	})
@@ -134,7 +105,7 @@ func (l *loggerImpl) init() {
 		l.zl = zerolog.New(newOutput).With().Timestamp().Logger()
 	}
 }
-func (l *loggerImpl) SetConfig(config LogConfig) {
+func (l *loggerImpl) SetConfig(config configs.LogConfig) {
 	configChanged := l.config != config
 	l.config = config
 	if configChanged {
@@ -157,7 +128,7 @@ func (l *loggerImpl) updateEnabledFlags(level zerolog.Level) {
 	l.isPanicEnabled = level <= zerolog.PanicLevel
 }
 
-func (l *loggerImpl) GetConfig() LogConfig {
+func (l *loggerImpl) GetConfig() configs.LogConfig {
 	return l.config
 }
 
