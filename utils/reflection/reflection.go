@@ -3,8 +3,10 @@ package reflection
 
 import (
 	"reflect"
+	"sync"
 )
 
+// OriginValueAndKindOutput holds the input and origin reflect value and kind.
 type OriginValueAndKindOutput struct {
 	InputValue  reflect.Value
 	InputKind   reflect.Kind
@@ -12,8 +14,17 @@ type OriginValueAndKindOutput struct {
 	OriginKind  reflect.Kind
 }
 
+var originValueAndKindPool = sync.Pool{
+	New: func() interface{} {
+		return new(OriginValueAndKindOutput)
+	},
+}
+
 // OriginValueAndKind retrieves and returns the original reflect value and kind.
-func OriginValueAndKind(value interface{}) (out OriginValueAndKindOutput) {
+func OriginValueAndKind(value interface{}) OriginValueAndKindOutput {
+	out := originValueAndKindPool.Get().(*OriginValueAndKindOutput)
+	defer originValueAndKindPool.Put(out)
+
 	if v, ok := value.(reflect.Value); ok {
 		out.InputValue = v
 	} else {
@@ -26,9 +37,10 @@ func OriginValueAndKind(value interface{}) (out OriginValueAndKindOutput) {
 		out.OriginValue = out.OriginValue.Elem()
 		out.OriginKind = out.OriginValue.Kind()
 	}
-	return
+	return *out
 }
 
+// OriginTypeAndKindOutput holds the input and origin reflect type and kind.
 type OriginTypeAndKindOutput struct {
 	InputType  reflect.Type
 	InputKind  reflect.Kind
@@ -36,19 +48,27 @@ type OriginTypeAndKindOutput struct {
 	OriginKind reflect.Kind
 }
 
+var originTypeAndKindPool = sync.Pool{
+	New: func() interface{} {
+		return new(OriginTypeAndKindOutput)
+	},
+}
+
 // OriginTypeAndKind retrieves and returns the original reflect type and kind.
-func OriginTypeAndKind(value interface{}) (out OriginTypeAndKindOutput) {
+func OriginTypeAndKind(value interface{}) OriginTypeAndKindOutput {
+	out := originTypeAndKindPool.Get().(*OriginTypeAndKindOutput)
+	defer originTypeAndKindPool.Put(out)
+
 	if value == nil {
-		return
+		return OriginTypeAndKindOutput{}
 	}
-	if reflectType, ok := value.(reflect.Type); ok {
-		out.InputType = reflectType
-	} else {
-		if reflectValue, ok := value.(reflect.Value); ok {
-			out.InputType = reflectValue.Type()
-		} else {
-			out.InputType = reflect.TypeOf(value)
-		}
+	switch v := value.(type) {
+	case reflect.Type:
+		out.InputType = v
+	case reflect.Value:
+		out.InputType = v.Type()
+	default:
+		out.InputType = reflect.TypeOf(value)
 	}
 	out.InputKind = out.InputType.Kind()
 	out.OriginType = out.InputType
@@ -57,11 +77,11 @@ func OriginTypeAndKind(value interface{}) (out OriginTypeAndKindOutput) {
 		out.OriginType = out.OriginType.Elem()
 		out.OriginKind = out.OriginType.Kind()
 	}
-	return
+	return *out
 }
 
 // ValueToInterface converts reflect value to its interface type.
-func ValueToInterface(v reflect.Value) (value interface{}, ok bool) {
+func ValueToInterface(v reflect.Value) (interface{}, bool) {
 	if v.IsValid() && v.CanInterface() {
 		return v.Interface(), true
 	}
@@ -78,9 +98,7 @@ func ValueToInterface(v reflect.Value) (value interface{}, ok bool) {
 		return v.Complex(), true
 	case reflect.String:
 		return v.String(), true
-	case reflect.Ptr:
-		return ValueToInterface(v.Elem())
-	case reflect.Interface:
+	case reflect.Ptr, reflect.Interface:
 		return ValueToInterface(v.Elem())
 	default:
 		return nil, false
