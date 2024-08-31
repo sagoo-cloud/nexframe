@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/sagoo-cloud/nexframe/socketeer"
+	"github.com/sagoo-cloud/nexframe/net/socketeer"
 	"log"
 	"net/http"
 	"strconv"
