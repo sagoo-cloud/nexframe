@@ -3,7 +3,7 @@ module github.com/sagoo-cloud/nexframe
 go 1.22.4
 
 require (
-	github.com/ServiceWeaver/weaver v0.24.3
+	github.com/ServiceWeaver/weaver v0.24.4
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/coocood/freecache v1.2.4
 	github.com/eclipse/paho.mqtt.golang v1.5.0
