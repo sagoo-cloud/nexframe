@@ -3,54 +3,57 @@ package convert
 import (
 	"github.com/sagoo-cloud/nexframe/encoding/gbinary"
 	"math"
+	"reflect"
 	"strconv"
 )
 
-// Uint converts `any` to uint.
+// uintConverter 是一个通用的无符号整数转换函数类型
+type uintConverter func(uint64) uint64
+
+// uintConvert 是一个通用的无符号整数转换函数
+func uintConvert[T uint | uint8 | uint16 | uint32 | uint64](any interface{}, converter uintConverter) T {
+	if any == nil {
+		return 0
+	}
+	return T(converter(Uint64(any)))
+}
+
+// Uint 将任意类型转换为 uint
 func Uint(any interface{}) uint {
-	if any == nil {
-		return 0
-	}
-	if v, ok := any.(uint); ok {
-		return v
-	}
-	return uint(Uint64(any))
+	return uintConvert[uint](any, func(v uint64) uint64 { return v })
 }
 
-// Uint8 converts `any` to uint8.
+// Uint8 将任意类型转换为 uint8，超过 255 的值会被截断为 255
 func Uint8(any interface{}) uint8 {
-	if any == nil {
-		return 0
-	}
-	if v, ok := any.(uint8); ok {
+	return uintConvert[uint8](any, func(v uint64) uint64 {
+		if v > 255 {
+			return 255
+		}
 		return v
-	}
-	return uint8(Uint64(any))
+	})
 }
 
-// Uint16 converts `any` to uint16.
+// Uint16 将任意类型转换为 uint16，超过 65535 的值会被截断为 65535
 func Uint16(any interface{}) uint16 {
-	if any == nil {
-		return 0
-	}
-	if v, ok := any.(uint16); ok {
+	return uintConvert[uint16](any, func(v uint64) uint64 {
+		if v > 65535 {
+			return 65535
+		}
 		return v
-	}
-	return uint16(Uint64(any))
+	})
 }
 
-// Uint32 converts `any` to uint32.
+// Uint32 将任意类型转换为 uint32，超过 4294967295 的值会被截断为 4294967295
 func Uint32(any interface{}) uint32 {
-	if any == nil {
-		return 0
-	}
-	if v, ok := any.(uint32); ok {
+	return uintConvert[uint32](any, func(v uint64) uint64 {
+		if v > 4294967295 {
+			return 4294967295
+		}
 		return v
-	}
-	return uint32(Uint64(any))
+	})
 }
 
-// Uint64 converts `any` to uint64.
+// Uint64 将任意类型转换为 uint64
 func Uint64(any interface{}) uint64 {
 	if any == nil {
 		return 0
@@ -59,11 +62,11 @@ func Uint64(any interface{}) uint64 {
 	case int:
 		return uint64(value)
 	case int8:
-		return uint64(value)
+		return uint64(uint8(value))
 	case int16:
-		return uint64(value)
+		return uint64(uint16(value))
 	case int32:
-		return uint64(value)
+		return uint64(uint32(value))
 	case int64:
 		return uint64(value)
 	case uint:
@@ -77,8 +80,14 @@ func Uint64(any interface{}) uint64 {
 	case uint64:
 		return value
 	case float32:
+		if value < 0 {
+			return 0
+		}
 		return uint64(value)
 	case float64:
+		if value < 0 {
+			return 0
+		}
 		return uint64(value)
 	case bool:
 		if value {
@@ -87,26 +96,51 @@ func Uint64(any interface{}) uint64 {
 		return 0
 	case []byte:
 		return gbinary.DecodeToUint64(value)
+	case string:
+		return parseString(value)
 	default:
-		if f, ok := value.(iUint64); ok {
-			return f.Uint64()
-		}
-		s := String(value)
-		// Hexadecimal
-		if len(s) > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
-			if v, e := strconv.ParseUint(s[2:], 16, 64); e == nil {
-				return v
+		v := reflect.ValueOf(any)
+		if v.Kind() == reflect.Ptr {
+			if v.IsNil() {
+				return 0
 			}
+			v = v.Elem()
 		}
-		// Decimal
-		if v, e := strconv.ParseUint(s, 10, 64); e == nil {
-			return v
-		}
-		// Float64
-		if valueFloat64 := Float64(value); math.IsNaN(valueFloat64) {
-			return 0
-		} else {
-			return uint64(valueFloat64)
+		switch v.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return uint64(v.Int())
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return v.Uint()
+		case reflect.Float32, reflect.Float64:
+			f := v.Float()
+			if f < 0 {
+				return 0
+			}
+			return uint64(f)
+		default:
+			return parseString(String(any))
 		}
 	}
+}
+
+// parseString 尝试将字符串解析为 uint64
+func parseString(s string) uint64 {
+	// 十六进制
+	if len(s) > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
+		if v, err := strconv.ParseUint(s[2:], 16, 64); err == nil {
+			return v
+		}
+	}
+	// 十进制
+	if v, err := strconv.ParseUint(s, 10, 64); err == nil {
+		return v
+	}
+	// 浮点数
+	if v, err := strconv.ParseFloat(s, 64); err == nil && !math.IsNaN(v) {
+		if v < 0 {
+			return 0
+		}
+		return uint64(v)
+	}
+	return 0
 }
