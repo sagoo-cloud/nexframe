@@ -54,6 +54,7 @@ type APIFramework struct {
 	contextValues  map[contextKey]interface{}
 	contextMu      sync.RWMutex
 	swaggerSpec    *spec.Swagger
+	host           string //主域名
 }
 
 // NewAPIFramework 创建新的APIFramework实例
@@ -558,6 +559,9 @@ func (f *APIFramework) GetServer() http.Handler {
 
 func (f *APIFramework) SetPort(addr string) {
 	f.addr = addr
+}
+func (f *APIFramework) SetHost(host string) {
+	f.host = host
 }
 
 func (f *APIFramework) Run() {

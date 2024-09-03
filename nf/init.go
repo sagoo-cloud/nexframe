@@ -19,6 +19,11 @@ func (f *APIFramework) Init() {
 		return
 	}
 
+	// 设置主域名
+	if f.host != "" {
+		f.router.Host(f.host)
+	}
+
 	// 遍历定义并设置路由
 	for _, def := range f.definitions {
 		// 创建一个测试实例并尝试初始化 Meta
