@@ -145,15 +145,6 @@ func (f *APIFramework) SetWebRoot(dir string) *APIFramework {
 	return f
 }
 
-func (f *APIFramework) BindHandler(prefix string, handler http.Handler) error {
-	f.router.Handle(prefix, handler)
-	return nil
-}
-func (f *APIFramework) BindHandlerFunc(prefix string, handler http.HandlerFunc) error {
-	f.router.Handle(prefix, handler)
-	return nil
-}
-
 // RegisterController 注册控制器
 func (f *APIFramework) RegisterController(prefix string, controllers ...interface{}) error {
 	for _, controller := range controllers {
