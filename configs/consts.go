@@ -10,12 +10,18 @@ const (
 	RedisMode               = "redis.mode"
 	RedisSentinelMasterName = "redis.sentinelMasterName"
 	RedisAddr               = "redis.addr"
-	RedisAuth               = "redis.auth"
+	RedisUsername           = "redis.username"
+	RedisPassword           = "redis.password"
 	RedisDb                 = "redis.db"
 	RedisMaxActive          = "redis.maxActive"
 	RedisMaxIdle            = "redis.maxIdle"
 	RedisIdleTimeout        = "redis.idleTimeout"
 	RedisPrefix             = "redis.prefix"
+
+	RedisDataCachePoolSize           = "dataCache.poolSize"
+	RedisDataCacheRecordDuration     = "dataCache.recordDuration"
+	RedisDataCacheRecordLimit        = "dataCache.recordLimit"
+	RedisDataCachePipelineBufferSize = "dataCache.pipelineBufferSize"
 )
 
 // 数据库配置

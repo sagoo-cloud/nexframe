@@ -17,12 +17,12 @@ type QueueConfig struct {
 }
 
 func LoadQueueConfig() *QueueConfig {
-	interval := EnvInt("queue.interval", 1)
+	interval := EnvInt(QueueInterval, 1)
 	config := &QueueConfig{
-		Prefix:      EnvString("queue.prefix", "wego"),
-		Listen:      EnvStringSlice("queue.listen"),
+		Prefix:      EnvString(QueuePrefix, "sagoo"),
+		Listen:      EnvStringSlice(QueueListen),
 		Interval:    time.Duration(interval) * time.Second,
-		Concurrency: EnvInt("queue.concurrency", 1),
+		Concurrency: EnvInt(QueueConcurrency, 1),
 	}
 	return config
 }

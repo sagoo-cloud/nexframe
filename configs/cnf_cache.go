@@ -17,7 +17,8 @@ func LoadCacheConfig() *CacheConfig {
 			Mode:               EnvString(RedisMode, "single"), // single, sentinel, cluster
 			SentinelMasterName: EnvString(RedisSentinelMasterName, "sagoo-master"),
 			Addr:               EnvString(RedisAddr, "127.0.0.1:6937"),
-			Auth:               EnvString(RedisAuth, "password"),
+			Username:           EnvString(RedisUsername, "default"),
+			Password:           EnvString(RedisPassword, "password"),
 			Db:                 EnvInt(RedisDb, 0),
 			MaxActive:          EnvInt(RedisMaxActive, 50),
 			MaxIdle:            EnvInt(RedisMaxIdle, 5),

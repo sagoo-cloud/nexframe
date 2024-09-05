@@ -59,18 +59,17 @@ type DataProcessor func(data string)
 // DB 用于全局获取RedisManager实例
 func DB() *RedisManager {
 	once.Do(func() {
-		cfg := configs.GetInstance()
-		// 从配置文件获取redis的ip以及db
-		mode := cfg.GetString("redis.default.mode", "single")
-		sentinelMasterName := cfg.GetString("redis.default.sentinelMasterName", "sagoo-master")
-		address := cfg.GetString("redis.default.address", "localhost:6379")
-		db := cfg.GetInt("redis.default.db", 0)
-		userName := cfg.GetString("redis.default.user", "default")
-		password := cfg.GetString("redis.default.pass", "")
-		poolSize := cfg.GetInt("system.deviceCacheData.poolSize", 500)
-		recordDuration := cfg.GetString("system.deviceCacheData.recordDuration", "10m")
-		recordLimit := cfg.GetInt("system.deviceCacheData.recordLimit", 1000)
-		pipelineBufferSize := cfg.GetInt("system.deviceCacheData.pipelineBufferSize", 3)
+		cfg := configs.LoadRedisConfig()
+		mode := cfg.Mode
+		sentinelMasterName := cfg.SentinelMasterName
+		address := cfg.Addr
+		db := cfg.Db
+		userName := cfg.Username
+		password := cfg.Password
+		poolSize := cfg.DataCacheConfig.PoolSize
+		recordDuration := cfg.DataCacheConfig.RecordDuration
+		recordLimit := cfg.DataCacheConfig.RecordLimit
+		pipelineBufferSize := cfg.DataCacheConfig.PipelineBufferSize
 
 		// 从配置文件获取redis的ip以及db
 		options := redisOptions{
