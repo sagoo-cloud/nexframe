@@ -3,6 +3,7 @@ package configs
 import (
 	"github.com/sagoo-cloud/nexframe/os/command/args"
 	"strings"
+	"time"
 )
 
 func Env(key string, value ...interface{}) interface{} {
@@ -30,6 +31,20 @@ func EnvString(key string, value ...interface{}) string {
 	}
 	return ret
 }
+func EnvDuration(key string, value ...interface{}) time.Duration {
+	mode := args.Mode
+	modeKey := strings.Join([]string{mode, key}, ".")
+	var ret time.Duration
+	if cfg.IsSet(modeKey) {
+		ret = cfg.GetDuration(modeKey)
+	} else if cfg.IsSet(key) {
+		ret = cfg.GetDuration(key)
+	} else {
+		ret = value[0].(time.Duration)
+	}
+	return ret
+}
+
 func EnvInt(key string, value ...interface{}) int {
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")

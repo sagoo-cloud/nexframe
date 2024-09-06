@@ -6,7 +6,6 @@ import (
 	"github.com/sagoo-cloud/nexframe/utils/meta"
 	"log"
 	"net/http"
-	"os"
 	"reflect"
 )
 
@@ -77,13 +76,11 @@ func (f *APIFramework) Init() {
 		f.router.PathPrefix("/assets/").Handler(f.NewStaticHandler(f.fileSystem, "assets"))
 	}
 
-	// 确保静态目录存在
-	if f.staticDir != "" {
-		if err := os.MkdirAll(f.staticDir, 0755); err != nil {
-			log.Printf("创建%s目录失败:%+v\n", f.staticDir, err)
+	// 设置静态文件服务
+	if f.config.FileServerEnabled {
+		for _, staticPath := range f.config.StaticPaths {
+			f.router.PathPrefix(staticPath.Prefix).Handler(http.StripPrefix(staticPath.Prefix, http.FileServer(http.Dir(staticPath.Path))))
 		}
-		// 设置 webroot 根目录
-		f.router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir(f.staticDir))))
 	}
 
 	f.initialized = true

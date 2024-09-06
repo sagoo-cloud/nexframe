@@ -2,7 +2,7 @@ package file
 
 import (
 	"bufio"
-	"errors"
+	"github.com/sagoo-cloud/nexframe/utils/gstr"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,11 +13,8 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var (
-	ErrInvalidPath  = errors.New("无效的文件路径")
-	ErrFileNotExist = errors.New("文件不存在")
-	ErrReadFailed   = errors.New("读取文件失败")
-	ErrWriteFailed  = errors.New("写入文件失败")
+const (
+	Separator = string(filepath.Separator)
 )
 
 // FileInfoCache 用于缓存文件信息
@@ -349,4 +346,23 @@ func SetCacheExpiration(duration time.Duration) {
 func InitFileSystem() {
 	// 可以在这里进行一些初始化操作，比如设置缓存过期时间
 	SetCacheExpiration(time.Minute * 5)
+}
+
+func Join(paths ...string) string {
+	var s string
+	for _, path := range paths {
+		if s != "" {
+			s += Separator
+		}
+		s += gstr.TrimRight(path, Separator)
+	}
+	return s
+}
+
+func Temp(names ...string) string {
+	path := os.TempDir()
+	for _, name := range names {
+		path = Join(path, name)
+	}
+	return path
 }
