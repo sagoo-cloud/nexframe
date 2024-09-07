@@ -2,7 +2,7 @@ package gerror
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
 )
 
 // New creates and returns an error which is formatted from given text.

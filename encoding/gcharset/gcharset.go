@@ -12,8 +12,8 @@ package gcharset
 import (
 	"bytes"
 	"errors"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	gerror2 "github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/korean"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -94,13 +94,13 @@ func Convert(dstCharset, srcCharset string, src string) (dst string, err error) 
 func ToUTF8(srcCharset string, src string) (dst string, err error) {
 	e := getEncoding(srcCharset)
 	if e == nil {
-		return "", gerror.Wrapf(ErrUnsupportedCharset, "unsupported srcCharset %q", srcCharset)
+		return "", gerror2.Wrapf(ErrUnsupportedCharset, "unsupported srcCharset %q", srcCharset)
 	}
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, transform.NewReader(bytes.NewReader([]byte(src)), e.NewDecoder()))
 	if err != nil {
-		return "", gerror.Wrapf(err, "convert string from %q to UTF-8 failed", srcCharset)
+		return "", gerror2.Wrapf(err, "convert string from %q to UTF-8 failed", srcCharset)
 	}
 	return buf.String(), nil
 }
@@ -109,13 +109,13 @@ func ToUTF8(srcCharset string, src string) (dst string, err error) {
 func UTF8To(dstCharset string, src string) (dst string, err error) {
 	e := getEncoding(dstCharset)
 	if e == nil {
-		return "", gerror.Wrapf(ErrUnsupportedCharset, "unsupported dstCharset %q", dstCharset)
+		return "", gerror2.Wrapf(ErrUnsupportedCharset, "unsupported dstCharset %q", dstCharset)
 	}
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, transform.NewReader(bytes.NewReader([]byte(src)), e.NewEncoder()))
 	if err != nil {
-		return "", gerror.Wrapf(err, "convert string from UTF-8 to %q failed", dstCharset)
+		return "", gerror2.Wrapf(err, "convert string from UTF-8 to %q failed", dstCharset)
 	}
 	return buf.String(), nil
 }
@@ -161,7 +161,7 @@ const MaxInputSize = 10 * 1024 * 1024 // 10MB
 // ConvertWithSizeLimit 在进行转换之前检查输入大小，防止处理过大的输入
 func ConvertWithSizeLimit(dstCharset, srcCharset string, src string) (dst string, err error) {
 	if len(src) > MaxInputSize {
-		return "", gerror.NewCodef(gcode.CodeInvalidParameter, "input size exceeds limit of %d bytes", MaxInputSize)
+		return "", gerror2.NewCodef(gcode.CodeInvalidParameter, "input size exceeds limit of %d bytes", MaxInputSize)
 	}
 	return Convert(dstCharset, srcCharset, src)
 }

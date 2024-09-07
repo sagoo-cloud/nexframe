@@ -3,7 +3,7 @@ package gerror
 import (
 	"errors"
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
 	"runtime"
 	"strings"
 )

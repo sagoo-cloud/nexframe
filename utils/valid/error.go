@@ -1,9 +1,9 @@
 package valid
 
 import (
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	gerror2 "github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils/gset"
 	"strings"
 )
@@ -36,8 +36,8 @@ type validationError struct {
 func newValidationError(code gcode.Code, rules []fieldRule, fieldRuleErrorMap map[string]map[string]error) *validationError {
 	for field, ruleErrorMap := range fieldRuleErrorMap {
 		for rule, err := range ruleErrorMap {
-			if !gerror.HasStack(err) {
-				ruleErrorMap[rule] = gerror.NewWithOption(gerror.Option{
+			if !gerror2.HasStack(err) {
+				ruleErrorMap[rule] = gerror2.NewWithOption(gerror2.Option{
 					Stack: false,
 					Text:  Trim(err.Error()),
 					Code:  code,

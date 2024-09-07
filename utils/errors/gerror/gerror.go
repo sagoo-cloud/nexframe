@@ -6,7 +6,7 @@
 package gerror
 
 import (
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
 )
 
 // IIs is the interface for Is feature.

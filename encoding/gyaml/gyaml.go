@@ -4,8 +4,8 @@ package gyaml
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"strings"
 
 	"gopkg.in/yaml.v3"

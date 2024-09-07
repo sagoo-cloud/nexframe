@@ -1,7 +1,7 @@
 package gerror
 
 import (
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
 )
 
 // Code returns the error code.

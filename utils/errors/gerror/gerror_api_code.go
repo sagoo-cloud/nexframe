@@ -2,7 +2,7 @@ package gerror
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
 	"strings"
 )
 

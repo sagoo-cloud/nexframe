@@ -1,6 +1,8 @@
 package gerror
 
-import "github.com/sagoo-cloud/nexframe/errors/gcode"
+import (
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+)
 
 // Option is option for creating error.
 type Option struct {

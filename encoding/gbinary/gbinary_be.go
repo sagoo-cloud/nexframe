@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/os/zlog/intlog"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"math"
 )
 

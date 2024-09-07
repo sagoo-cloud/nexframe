@@ -1,8 +1,8 @@
 package gstructs
 
 import (
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils/tag"
 	"reflect"
 	"strconv"

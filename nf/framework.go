@@ -588,6 +588,10 @@ func (f *APIFramework) Run() {
 	}()
 
 	// 如果配置了 HTTPS，启动 HTTPS 服务器
+	//// HTTPS.
+	//if f.config.TLSConfig == nil && f.config.HTTPSCertPath != "" {
+	//	f.EnableHTTPS(c.HTTPSCertPath, c.HTTPSKeyPath)
+	//}
 	if f.config.HTTPSAddress != "" && f.config.HTTPSCertPath != "" && f.config.HTTPSKeyPath != "" {
 		go func() {
 			log.Printf("%s Starting HTTPS server on %s", f.config.Name, f.config.HTTPSAddress)

@@ -2,9 +2,9 @@ package convert
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"regexp"
 	"strconv"
 	"time"

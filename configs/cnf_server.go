@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"crypto/tls"
 	"github.com/sagoo-cloud/nexframe/os/file"
 	"time"
 )
@@ -13,6 +14,8 @@ type ServerConfig struct {
 	HTTPSAddress  string
 	HTTPSCertPath string
 	HTTPSKeyPath  string
+
+	TLSConfig *tls.Config `json:"tlsConfig"`
 
 	// ReadTimeout 是读取整个请求(包括请求体)的最大持续时间。
 	//

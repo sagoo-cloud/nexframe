@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"io"
 )
 

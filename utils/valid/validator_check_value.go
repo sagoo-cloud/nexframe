@@ -3,10 +3,10 @@ package valid
 import (
 	"context"
 	"errors"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	gerror2 "github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"github.com/sagoo-cloud/nexframe/utils/json"
 	"github.com/sagoo-cloud/nexframe/utils/valid/internal/builtin"
 	"reflect"
@@ -179,13 +179,13 @@ func (v *Validator) doCheckValue(ctx context.Context, in doCheckValueInput) Erro
 					err = errors.New(errMsg)
 				}
 				// The error should have stack info to indicate the error position.
-				if !gerror.HasStack(err) {
-					err = gerror.NewCode(gcode.CodeValidationFailed, err.Error())
+				if !gerror2.HasStack(err) {
+					err = gerror2.NewCode(gcode.CodeValidationFailed, err.Error())
 				}
 				// The error should have error code that is `gcode.CodeValidationFailed`.
-				if gerror.Code(err) == gcode.CodeNil {
+				if gerror2.Code(err) == gcode.CodeNil {
 					// TODO it's better using interface?
-					if e, ok := err.(*gerror.Error); ok {
+					if e, ok := err.(*gerror2.Error); ok {
 						e.SetCode(gcode.CodeValidationFailed)
 					}
 				}

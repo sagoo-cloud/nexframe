@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/errors"
+	"github.com/sagoo-cloud/nexframe/utils/errors"
 	"runtime"
 	"strings"
 )

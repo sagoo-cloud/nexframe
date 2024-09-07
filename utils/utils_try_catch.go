@@ -2,8 +2,8 @@ package utils
 
 import (
 	"context"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	gerror2 "github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 )
 
 // Throw throws out an exception, which can be caught be TryCatch or recover.
@@ -19,10 +19,10 @@ func Try(ctx context.Context, try func(ctx context.Context)) (err error) {
 	}
 	defer func() {
 		if exception := recover(); exception != nil {
-			if v, ok := exception.(error); ok && gerror.HasStack(v) {
+			if v, ok := exception.(error); ok && gerror2.HasStack(v) {
 				err = v
 			} else {
-				err = gerror.NewCodef(gcode.CodeInternalPanic, "%+v", exception)
+				err = gerror2.NewCodef(gcode.CodeInternalPanic, "%+v", exception)
 			}
 		}
 	}()

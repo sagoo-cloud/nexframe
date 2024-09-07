@@ -2,7 +2,7 @@
 package gstructs
 
 import (
-	"github.com/sagoo-cloud/nexframe/errors/gerror"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"reflect"
 )
 

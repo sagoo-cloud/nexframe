@@ -3,8 +3,8 @@ package valid
 import (
 	"context"
 	"errors"
-	"github.com/sagoo-cloud/nexframe/errors/gcode"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
 	"github.com/sagoo-cloud/nexframe/utils/reflection"
 	"reflect"
 	"strings"
