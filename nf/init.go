@@ -67,9 +67,16 @@ func (f *APIFramework) Init() {
 	}
 
 	// 添加 Swagger UI 路由
-	f.router.HandleFunc("/swagger/doc.json", f.serveSwaggerSpec)
-	// Swagger UI 路由
-	f.router.PathPrefix("/swagger/").Handler(swagger.WrapHandler)
+	if f.config.OpenApiPath != "" {
+		f.router.HandleFunc(f.config.OpenApiPath, f.serveSwaggerSpec)
+	} else {
+		f.router.HandleFunc("/swagger/doc.json", f.serveSwaggerSpec)
+	}
+	if f.config.SwaggerPath != "" {
+		f.router.PathPrefix(f.config.SwaggerPath).Handler(swagger.WrapHandler)
+	} else {
+		f.router.PathPrefix("/swagger/").Handler(swagger.WrapHandler)
+	}
 
 	// 设置静态资源路由
 	if f.wwwRoot != "" && f.fileSystem != nil {
