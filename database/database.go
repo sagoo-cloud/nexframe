@@ -141,7 +141,7 @@ func (m *DBManager) StartHealthCheck(interval time.Duration) {
 }
 
 // GetGormDB 获取gorm.DB
-func GetGormDB(dbConfig *configs.ModGormDb) (dbm *DBManager, err error) {
+func GetGormDB(dbConfig *configs.GormDbConfig) (dbm *DBManager, err error) {
 	manager := GetDBManager()
 
 	// 如果数据库管理器未初始化，则进行初始化
@@ -183,7 +183,7 @@ func GetGormDB(dbConfig *configs.ModGormDb) (dbm *DBManager, err error) {
 
 	return manager, nil
 }
-func SetDsn(m *configs.ModGormDb) string {
+func SetDsn(m *configs.GormDbConfig) string {
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?%s",
 		m.Username,
 		m.Password,

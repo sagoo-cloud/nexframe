@@ -5,7 +5,26 @@ import (
 	"github.com/sagoo-cloud/nexframe/os/command/args"
 )
 
-func LoadDatabaseConfig() *ModGormDb {
+type GormDbConfig struct {
+	Driver       string
+	Host         string
+	Port         string
+	Username     string
+	Password     string
+	Dbname       string
+	Config       string
+	Prefix       string
+	Singular     bool
+	Engine       string
+	MaxIdleConns int
+	MaxOpenConns int
+	LogMode      string
+	LogZap       bool
+	Dsn          string
+	ShowSQL      bool
+}
+
+func LoadDatabaseConfig() *GormDbConfig {
 	driver := EnvString(DatabaseDriver, "mysql")
 	dataSource := fmt.Sprintf(
 		"%s:%s@(%s:%s)/%s"+"?%s",
@@ -20,7 +39,7 @@ func LoadDatabaseConfig() *ModGormDb {
 	if args.Mode != "prod" {
 		show = true
 	}
-	config := &ModGormDb{
+	config := &GormDbConfig{
 		Driver:       driver,
 		Dsn:          dataSource,
 		ShowSQL:      EnvBool(DatabaseShowSQL, show),
