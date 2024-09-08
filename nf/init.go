@@ -72,10 +72,16 @@ func (f *APIFramework) Init() {
 	} else {
 		f.router.HandleFunc("/swagger/doc.json", f.serveSwaggerSpec)
 	}
+
+	// 进行swagger文档初始化
+	swaggerHandler := swagger.Handler(
+		swagger.TemplateContent(f.config.SwaggerUITemplate),
+	)
+
 	if f.config.SwaggerPath != "" {
-		f.router.PathPrefix(f.config.SwaggerPath).Handler(swagger.WrapHandler)
+		f.router.PathPrefix(f.config.SwaggerPath).Handler(swaggerHandler)
 	} else {
-		f.router.PathPrefix("/swagger/").Handler(swagger.WrapHandler)
+		f.router.PathPrefix("/swagger/").Handler(swaggerHandler)
 	}
 
 	// 设置静态资源路由

@@ -29,12 +29,18 @@ type Config struct {
 	PersistAuthorization     bool
 	Layout                   SwaggerLayout
 	DefaultModelsExpandDepth ModelsExpandDepthType
+	TemplateContent          string
 }
 
 // URL presents the url pointing to API definition (normally swagger.json or swagger.yaml).
 func URL(url string) func(*Config) {
 	return func(c *Config) {
 		c.URL = url
+	}
+}
+func TemplateContent(templateContent string) func(*Config) {
+	return func(c *Config) {
+		c.TemplateContent = templateContent
 	}
 }
 
@@ -168,9 +174,13 @@ func newConfig(configFns ...func(*Config)) *Config {
 func Handler(configFns ...func(*Config)) http.HandlerFunc {
 
 	config := newConfig(configFns...)
+	var templateContent = indexTempl
+	if config.TemplateContent != "" {
+		templateContent = config.TemplateContent
+	}
 
 	// create a template with name
-	index, _ := template.New("swagger_index.html").Parse(indexTempl)
+	index, _ := template.New("swagger_index.html").Parse(templateContent)
 
 	re := regexp.MustCompile(`^(.*/)([^?].*)?[?|.]*$`)
 
