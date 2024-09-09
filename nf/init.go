@@ -48,6 +48,9 @@ func (f *APIFramework) Init() {
 		log.Printf("Applying %d middlewares\n", len(f.middlewares))
 	}
 
+	// 添加错误处理中间件
+	f.UseErrorHandlingMiddleware()
+
 	// 应用上下文中间件
 	f.router.Use(f.createContextMiddleware())
 
