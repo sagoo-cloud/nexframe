@@ -1,6 +1,8 @@
 module github.com/sagoo-cloud/nexframe
 
-go 1.22.4
+go 1.23
+
+toolchain go1.23.1
 
 require (
 	github.com/ServiceWeaver/weaver v0.24.4
@@ -60,6 +62,9 @@ require (
 	github.com/google/cel-go v0.17.1 // indirect
 	github.com/google/pprof v0.0.0-20230705174524-200ffdc848b8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/context v1.1.2 // indirect
+	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/gorilla/sessions v1.4.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
