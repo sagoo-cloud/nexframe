@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gorilla/mux"
-	"github.com/sagoo-cloud/nexframe/utils/auth"
+	"github.com/sagoo-cloud/nexframe/auth"
 	"log"
 )
 

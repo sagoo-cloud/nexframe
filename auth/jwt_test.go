@@ -1,5 +1,3 @@
-// auth/jwt_test.go
-
 package auth
 
 import (
