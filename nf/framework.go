@@ -11,6 +11,7 @@ import (
 	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/nf/g"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
+	"github.com/sagoo-cloud/nexframe/utils/grand"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
 	"io"
 	"io/fs"
@@ -608,7 +609,7 @@ func (f *APIFramework) Run() {
 			}
 		}()
 	}
-
+	grand.Stop()
 	c := make(chan os.Signal, 1)
 	// 我们将在接收到 SIGINT (Ctrl+C) 时接受优雅关闭
 	// SIGKILL, SIGQUIT 或 SIGTERM (Ctrl+/) 将不会被捕获。
