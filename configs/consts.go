@@ -8,6 +8,7 @@ const (
 // web服务配置
 const (
 	ServerName              = "server.name"
+	ServerHost              = "server.host"
 	ServerAddress           = "server.address"
 	ServerHTTPSAddress      = "server.httpsAddress"
 	ServerHTTPSCertPath     = "server.httpsCertPath"

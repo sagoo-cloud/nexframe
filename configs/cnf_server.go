@@ -9,8 +9,8 @@ import (
 type ServerConfig struct {
 	Name string
 
-	Address string
-
+	Address       string
+	Host          string
 	HTTPSAddress  string
 	HTTPSCertPath string
 	HTTPSKeyPath  string
@@ -150,6 +150,7 @@ func LoadServerConfig() *ServerConfig {
 
 	return &ServerConfig{
 		Name:              EnvString(ServerName, "server"),
+		Host:              EnvString(ServerHost, ":8081"),
 		Address:           EnvString(ServerAddress, ":8081"),
 		HTTPSAddress:      EnvString(ServerHTTPSAddress, ":43"),
 		HTTPSKeyPath:      EnvString(ServerHTTPSKeyPath, ""),
