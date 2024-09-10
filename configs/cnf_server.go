@@ -146,36 +146,6 @@ type staticPathItem struct {
 	Path   string // 静态路径。
 }
 
-const (
-	ServerName              = "server.name"
-	ServerAddress           = "server.address"
-	ServerHTTPSAddress      = "server.httpsAddress"
-	ServerHTTPSCertPath     = "server.httpsCertPath"
-	ServerHTTPSKeyPath      = "server.httpsKeyPath"
-	ServerReadTimeout       = "server.readTimeout"
-	ServerWriteTimeout      = "server.writeTimeout"
-	ServerIdleTimeout       = "server.idleTimeout"
-	ServerMaxHeaderBytes    = "server.maxHeaderBytes"
-	ServerKeepAlive         = "server.keepAlive"
-	ServerServerAgent       = "server.serverAgent"
-	ServerIndexFiles        = "server.indexFiles"
-	ServerIndexFolder       = "server.indexFolder"
-	ServerServerRoot        = "server.serverRoot"
-	ServerSearchPaths       = "server.searchPaths"
-	ServerFileServerEnabled = "server.fileServerEnabled"
-	ServerPProfEnabled      = "server.pprofEnabled"
-	ServerPProfPattern      = "server.pprofPattern"
-
-	ServerCookieMaxAge = "server.cookie.maxAge"
-	ServerCookiePath   = "server.cookie.path"
-	ServerCookieDomain = "server.cookie.domain"
-
-	ServerSessionIdName       = "server.session.idName"
-	ServerSessionMaxAge       = "server.session.maxAge"
-	ServerSessionCookieMaxAge = "server.session.cookieMaxAge"
-	ServerSessionCookieOutput = "server.session.cookieOutput"
-)
-
 func LoadServerConfig() *ServerConfig {
 
 	return &ServerConfig{
