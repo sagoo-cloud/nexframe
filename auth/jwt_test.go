@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,14 +29,11 @@ func TestNewMiddleware(t *testing.T) {
 
 	// 测试默认值
 	middleware, _ := New(JwtConfig{SigningKey: testSecretKey})
-	if middleware.config.SigningMethod != "HS256" {
-		t.Errorf("默认签名方法错误: 得到 %v, 期望 HS256", middleware.config.SigningMethod)
+	if middleware.conf.SigningMethod != "HS256" {
+		t.Errorf("默认签名方法错误: 得到 %v, 期望 HS256", middleware.conf.SigningMethod)
 	}
-	if middleware.config.TokenLookup != "header:Authorization" {
-		t.Errorf("默认令牌查找错误: 得到 %v, 期望 header:Authorization", middleware.config.TokenLookup)
-	}
-	if middleware.config.ContextKey != "user" {
-		t.Errorf("默认上下文键错误: 得到 %v, 期望 user", middleware.config.ContextKey)
+	if middleware.conf.TokenLookup != "header:Authorization" {
+		t.Errorf("默认令牌查找错误: 得到 %v, 期望 header:Authorization", middleware.conf.TokenLookup)
 	}
 }
 
@@ -50,8 +46,12 @@ func TestMiddleware(t *testing.T) {
 
 	// 创建一个受保护的处理程序
 	protectedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims := r.Context().Value("user").(*TokenClaims)
-		w.Write([]byte("Welcome, " + claims.Username))
+		claims, ok := FromContext(r.Context())
+		if !ok {
+			w.WriteHeader(401)
+			return
+		}
+		w.Write([]byte("Welcome, " + claims.(*TokenClaims).Username))
 	})
 
 	// 创建路由器并应用中间件
@@ -177,9 +177,14 @@ func TestTokenExtraction(t *testing.T) {
 // TestCreateAndSendToken 测试创建和发送令牌
 func TestCreateAndSendToken(t *testing.T) {
 	w := httptest.NewRecorder()
-	claims := TokenClaims{Username: "testuser"}
-	err := CreateAndSendToken(w, claims, testSecretKey, time.Hour)
-
+	token, err := GenerateToken(string(testSecretKey), WithClaims(func() jwt.Claims {
+		return &TokenClaims{
+			Username: "testuser",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			},
+		}
+	}))
 	if err != nil {
 		t.Fatalf("创建令牌失败: %v", err)
 	}
@@ -188,30 +193,14 @@ func TestCreateAndSendToken(t *testing.T) {
 		t.Errorf("意外的状态码: 得到 %v 想要 %v", w.Code, http.StatusOK)
 	}
 
-	var response TokenResponse
-	err = json.NewDecoder(w.Body).Decode(&response)
-	if err != nil {
-		t.Fatalf("解码响应失败: %v", err)
-	}
-
-	if response.Token == "" {
-		t.Error("令牌为空")
-	}
-
 	// 验证令牌
-	token, err := jwt.ParseWithClaims(response.Token, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+	claims, err := ParseJwtToken(token, WithKeyFunc(func(token *jwt.Token) (interface{}, error) {
 		return testSecretKey, nil
-	})
-
+	}))
 	if err != nil {
 		t.Fatalf("解析令牌失败: %v", err)
 	}
-
-	if !token.Valid {
-		t.Error("令牌无效")
-	}
-
-	if claims, ok := token.Claims.(*TokenClaims); ok {
+	if claims, ok := claims.(*TokenClaims); ok {
 		if claims.Username != "testuser" {
 			t.Errorf("意外的用户名: 得到 %v 想要 %v", claims.Username, "testuser")
 		}
@@ -227,8 +216,8 @@ func TestCustomErrorHandler(t *testing.T) {
 	}
 
 	middleware, _ := New(JwtConfig{
-		SigningKey:   testSecretKey,
-		ErrorHandler: customErrorHandler,
+		SigningKey: testSecretKey,
+		ErrHandler: customErrorHandler,
 	})
 
 	handler := middleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -251,18 +240,17 @@ func TestCustomErrorHandler(t *testing.T) {
 
 // createToken 是一个辅助函数，用于创建有效的测试令牌
 func createToken(t *testing.T, username string, expiration time.Duration) string {
-	claims := TokenClaims{
-		Username: username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	tokenString, err := token.SignedString(testSecretKey)
+	token, err := GenerateToken(string(testSecretKey), WithClaims(func() jwt.Claims {
+		return &TokenClaims{
+			Username: "testuser",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
+			},
+		}
+	}))
 	if err != nil {
 		t.Fatalf("创建令牌失败: %v", err)
 	}
 
-	return tokenString
+	return token
 }

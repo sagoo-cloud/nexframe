@@ -4,106 +4,108 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"strings"
-	"time"
+)
 
-	"github.com/golang-jwt/jwt/v5"
+type authKey struct{}
+
+const (
+	bearerWord       string = "Bearer"
+	bearerFormat     string = "Bearer %s"
+	authorizationKey string = "Authorization"
+)
+
+var (
+	ErrMissingJwtToken        = errors.New("JWT token is missing")
+	ErrMissingKeyFunc         = errors.New("keyFunc is missing")
+	ErrTokenInvalid           = errors.New("Token is invalid")
+	ErrTokenExpired           = errors.New("JWT token has expired")
+	ErrTokenParseFail         = errors.New("Fail to parse JWT token ")
+	ErrUnSupportSigningMethod = errors.New("Wrong signing method")
+	ErrWrongContext           = errors.New("Wrong context for middleware")
+	ErrNeedTokenProvider      = errors.New("Token provider is missing")
+	ErrSignToken              = errors.New("Can not sign token.Is the key correct?")
+	ErrGetKey                 = errors.New("Can not get key while signing token")
 )
 
 // JwtConfig 定义了 JWT 中间件的配置
 type JwtConfig struct {
-	SigningKey    interface{}  // 用于签名的密钥
-	SigningMethod string       // 签名方法
-	TokenLookup   string       // 定义如何查找令牌
-	ContextKey    string       // 用于在上下文中存储用户信息的键
-	ErrorHandler  ErrorHandler // 错误处理函数
+	SigningKey    interface{} // 用于签名的密钥
+	TokenLookup   string      // 定义如何查找令牌
+	SigningMethod string      // 签名方法
+	ErrHandler    func(w http.ResponseWriter, r *http.Request, err error)
 }
 
-// ErrorHandler 是一个处理中间件错误的函数类型
-type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error)
-
-// JWTMiddleware 是验证 JWT 令牌的中间件
-type JWTMiddleware struct {
-	config JwtConfig
+// jwtMiddleware 是验证 JWT 令牌的中间件
+type jwtMiddleware struct {
+	opt  options
+	conf JwtConfig
 }
 
-// TokenClaims 表示我们想要存储在令牌中的声明
-type TokenClaims struct {
-	Username string `json:"username"`
-	// 在这里添加你想包含的其他声明
-	jwt.RegisteredClaims
-}
-
-// TokenResponse 表示发送回客户端的响应
-type TokenResponse struct {
-	Token string `json:"token"`
-}
-
-// New 创建一个新的 JWTMiddleware 实例
-func New(config JwtConfig) (*JWTMiddleware, error) {
+// New 创建一个新的 jwtMiddleware 实例
+func New(config JwtConfig) (*jwtMiddleware, error) {
+	o := options{signingMethod: jwt.SigningMethodHS256}
 	if config.SigningKey == nil {
 		return nil, errors.New("jwt 中间件需要签名密钥")
+	} else {
+		o.keyFunc = func(token *jwt.Token) (interface{}, error) {
+			return config.SigningKey, nil
+		}
 	}
-
 	if config.SigningMethod == "" {
 		config.SigningMethod = "HS256"
 	}
-
 	if config.TokenLookup == "" {
 		config.TokenLookup = "header:Authorization"
 	}
-
-	if config.ContextKey == "" {
-		config.ContextKey = "user"
+	if config.ErrHandler == nil {
+		config.ErrHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+		}
 	}
-
-	if config.ErrorHandler == nil {
-		config.ErrorHandler = defaultErrorHandler
-	}
-
-	return &JWTMiddleware{config: config}, nil
+	return &jwtMiddleware{
+		conf: config,
+		opt:  o,
+	}, nil
 }
 
 // Middleware 返回一个可以与 gorilla/mux 的 Use() 方法一起使用的 http.Handler
-func (jm *JWTMiddleware) Middleware(next http.Handler) http.Handler {
+func (jm *jwtMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := jm.extractToken(r)
 		if err != nil {
-			jm.config.ErrorHandler(w, r, err)
+			jm.conf.ErrHandler(w, r, err)
 			return
 		}
 
-		claims, err := jm.parseToken(token)
+		claims, err := ParseJwtToken(token, WithSigningMethod(jm.opt.signingMethod), WithKeyFunc(jm.opt.keyFunc))
 		if err != nil {
-			jm.config.ErrorHandler(w, r, err)
+			jm.conf.ErrHandler(w, r, err)
 			return
 		}
-
-		ctx := context.WithValue(r.Context(), jm.config.ContextKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(NewContext(r.Context(), claims)))
 	})
 }
 
 // extractToken 从请求中提取令牌
-func (jm *JWTMiddleware) extractToken(r *http.Request) (string, error) {
-	parts := strings.Split(jm.config.TokenLookup, ":")
+func (jm *jwtMiddleware) extractToken(r *http.Request) (string, error) {
+	parts := strings.Split(jm.conf.TokenLookup, ":")
 	switch parts[0] {
 	case "header":
-		return jm.extractTokenFromHeader(r, parts[1])
+		return extractTokenFromHeader(r, parts[1])
 	case "query":
-		return jm.extractTokenFromQuery(r, parts[1])
+		return extractTokenFromQuery(r, parts[1])
 	case "cookie":
-		return jm.extractTokenFromCookie(r, parts[1])
+		return extractTokenFromCookie(r, parts[1])
 	}
 	return "", errors.New("无效的令牌查找配置")
 }
 
 // extractTokenFromHeader 从请求头中提取令牌
-func (jm *JWTMiddleware) extractTokenFromHeader(r *http.Request, header string) (string, error) {
+func extractTokenFromHeader(r *http.Request, header string) (string, error) {
 	authHeader := r.Header.Get(header)
 	if authHeader == "" {
 		return "", errors.New("缺少认证头")
@@ -116,7 +118,7 @@ func (jm *JWTMiddleware) extractTokenFromHeader(r *http.Request, header string) 
 }
 
 // extractTokenFromQuery 从查询参数中提取令牌
-func (jm *JWTMiddleware) extractTokenFromQuery(r *http.Request, param string) (string, error) {
+func extractTokenFromQuery(r *http.Request, param string) (string, error) {
 	token := r.URL.Query().Get(param)
 	if token == "" {
 		return "", errors.New("查询参数中缺少令牌")
@@ -125,7 +127,7 @@ func (jm *JWTMiddleware) extractTokenFromQuery(r *http.Request, param string) (s
 }
 
 // extractTokenFromCookie 从 cookie 中提取令牌
-func (jm *JWTMiddleware) extractTokenFromCookie(r *http.Request, name string) (string, error) {
+func extractTokenFromCookie(r *http.Request, name string) (string, error) {
 	cookie, err := r.Cookie(name)
 	if err != nil {
 		return "", errors.New("cookie 中缺少令牌")
@@ -133,51 +135,85 @@ func (jm *JWTMiddleware) extractTokenFromCookie(r *http.Request, name string) (s
 	return cookie.Value, nil
 }
 
-// parseToken 解析和验证令牌
-func (jm *JWTMiddleware) parseToken(tokenString string) (*TokenClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Method.Alg() != jm.config.SigningMethod {
-			return nil, fmt.Errorf("意外的 jwt 签名方法=%v", token.Header["alg"])
-		}
-		return jm.config.SigningKey, nil
-	})
+// Parser is a jwt parser
+type options struct {
+	signingMethod jwt.SigningMethod
+	claims        func() jwt.Claims
+	keyFunc       jwt.Keyfunc
+	tokenHeader   map[string]interface{}
+}
 
+type TokenClaims struct {
+	Username string `json:"username"`
+	// 在这里添加你想包含的其他声明
+	jwt.RegisteredClaims
+}
+
+// Option is jwt option.
+type Option func(*options)
+
+func WithSigningMethod(method jwt.SigningMethod) Option {
+	return func(o *options) {
+		o.signingMethod = method
+	}
+}
+func WithKeyFunc(f jwt.Keyfunc) Option {
+	return func(o *options) {
+		o.keyFunc = f
+	}
+}
+func WithClaims(f func() jwt.Claims) Option {
+	return func(o *options) {
+		o.claims = f
+	}
+}
+
+// NewContext put auth info into context
+func NewContext(ctx context.Context, info jwt.Claims) context.Context {
+	return context.WithValue(ctx, authKey{}, info)
+}
+
+// FromContext extract auth info from context
+func FromContext(ctx context.Context) (token jwt.Claims, ok bool) {
+	token, ok = ctx.Value(authKey{}).(jwt.Claims)
+	return
+}
+
+func GenerateToken(key string, opts ...Option) (string, error) {
+	o := &options{signingMethod: jwt.SigningMethodHS256}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return jwt.NewWithClaims(o.signingMethod, o.claims()).SignedString([]byte(key))
+}
+
+// ParseJwtToken 解析和验证令牌
+func ParseJwtToken(jwtToken string, opts ...Option) (jwt.Claims, error) {
+	var (
+		tokenInfo *jwt.Token
+		err       error
+	)
+
+	o := &options{
+		claims: func() jwt.Claims {
+			return &TokenClaims{}
+		},
+		signingMethod: jwt.SigningMethodHS256,
+	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	if o.claims != nil {
+		tokenInfo, err = jwt.ParseWithClaims(jwtToken, o.claims(), o.keyFunc)
+	} else {
+		tokenInfo, err = jwt.Parse(jwtToken, o.keyFunc)
+	}
 	if err != nil {
 		return nil, err
+	} else if !tokenInfo.Valid {
+		return nil, ErrTokenInvalid
+	} else if tokenInfo.Method != o.signingMethod {
+		return nil, ErrUnSupportSigningMethod
 	}
-
-	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
-		return claims, nil
-	}
-
-	return nil, errors.New("无效的令牌")
-}
-
-// defaultErrorHandler 是默认的错误处理函数
-func defaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	http.Error(w, err.Error(), http.StatusUnauthorized)
-}
-
-// CreateAndSendToken 创建一个 JWT 令牌并将其作为 JSON 响应发送
-func CreateAndSendToken(w http.ResponseWriter, claims TokenClaims, signingKey []byte, expirationTime time.Duration) error {
-	claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(expirationTime))
-
-	// 创建令牌
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// 签名并获取完整的编码令牌作为字符串
-	tokenString, err := token.SignedString(signingKey)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return err
-	}
-
-	// 创建响应
-	response := TokenResponse{
-		Token: tokenString,
-	}
-
-	// 发送响应
-	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(response)
+	return tokenInfo.Claims, nil
 }
