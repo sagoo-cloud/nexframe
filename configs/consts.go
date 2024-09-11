@@ -26,6 +26,8 @@ const (
 	ServerFileServerEnabled = "server.fileServerEnabled"
 	ServerPProfEnabled      = "server.pprofEnabled"
 	ServerPProfPattern      = "server.pprofPattern"
+	ServerStatsVizEnabled   = "server.statsVizEnabled"
+	ServerStatsVizPort      = "server.statsVizPort"
 
 	ServerCookieMaxAge = "server.cookie.maxAge"
 	ServerCookiePath   = "server.cookie.path"

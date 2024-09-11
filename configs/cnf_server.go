@@ -129,6 +129,8 @@ type ServerConfig struct {
 	PProfEnabled bool   // PProfEnabled 启用 PProf 功能。
 	PProfPattern string // PProfPattern 指定路由器的 PProf 服务模式。
 
+	StatsVizEnabled bool   // StatsVizEnabled 启用 StatsViz 功能。
+	StatsVizPort    string // StatsVizPort 指定 StatsViz 服务端口。
 	// ======================================================================================================
 	// API & Swagger.
 	// ======================================================================================================
@@ -170,6 +172,8 @@ func LoadServerConfig() *ServerConfig {
 		FileServerEnabled: EnvBool(ServerFileServerEnabled, false),
 		PProfEnabled:      EnvBool(ServerPProfEnabled, false),
 		PProfPattern:      EnvString(ServerPProfPattern, "/debug/pprof/"),
+		StatsVizEnabled:   EnvBool(ServerStatsVizEnabled, false),
+		StatsVizPort:      EnvString(ServerStatsVizPort, ":8088"),
 
 		CookieMaxAge: EnvDuration(ServerCookieMaxAge, time.Hour*24*365),
 		CookiePath:   EnvString(ServerCookiePath, "/"),

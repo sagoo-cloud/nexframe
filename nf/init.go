@@ -23,6 +23,9 @@ func (f *APIFramework) Init() {
 		f.router.Host(f.host)
 	}
 
+	if f.config.StatsVizEnabled {
+		f.EnableStatsviz()
+	}
 	// 遍历定义并设置路由
 	for _, def := range f.definitions {
 		// 创建一个测试实例并尝试初始化 Meta
