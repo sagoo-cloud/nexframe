@@ -4,28 +4,24 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"flag"
 	"fmt"
+	"github.com/ServiceWeaver/weaver"
 	"github.com/go-openapi/spec"
 	"github.com/gorilla/mux"
 	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/contracts"
 	"github.com/sagoo-cloud/nexframe/nf/g"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
-	"github.com/sagoo-cloud/nexframe/utils/grand"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"os/signal"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 )
 
 // contextKey 是用于存储自定义值的键的类型
@@ -562,76 +558,55 @@ func (f *APIFramework) SetHost(host string) {
 	f.host = host
 }
 
-func (f *APIFramework) Run() {
-	var wait time.Duration
-	flag.DurationVar(&wait, "graceful-timeout", time.Second*15, "the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
-	flag.Parse()
-
-	if f.addr == "" {
-		f.addr = f.config.Address
-	}
+func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 	if f.host == "" {
 		f.host = f.config.Host
 	}
 
-	// 创建 HTTP 服务器
-	srv := &http.Server{
-		Addr:         f.addr,
-		Handler:      f.GetServer(),
-		ReadTimeout:  f.config.ReadTimeout,
-		WriteTimeout: f.config.WriteTimeout,
-		IdleTimeout:  f.config.IdleTimeout,
-	}
+	for _, web := range httpServes {
+		addr := strings.Split(web.Addr().String(), ":")
+		n := len(addr) - 1
+		addPort := ":" + addr[n]
+		f.SetPort(addPort)
+		log.Printf("Sagooiot HTTP Service %s", addPort)
+		swaggerUrl := fmt.Sprintf("http://localhost%s/swagger/index.html", addPort)
+		log.Printf(swaggerUrl)
 
-	// 启动 HTTP 服务器
-	go func() {
-		log.Printf("%s Starting HTTP server on %s", f.config.Name, f.addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", f.config.Name, err)
+		//创建 HTTP 服务器
+		srv := &http.Server{
+			Handler: f.GetServer(),
+
+			ReadTimeout:  f.config.ReadTimeout,
+			WriteTimeout: f.config.WriteTimeout,
+			IdleTimeout:  f.config.IdleTimeout,
 		}
-	}()
-
-	// 如果配置了 HTTPS，启动 HTTPS 服务器
-	//// HTTPS.
-	//if f.config.TLSConfig == nil && f.config.HTTPSCertPath != "" {
-	//	f.EnableHTTPS(c.HTTPSCertPath, c.HTTPSKeyPath)
-	//}
-	if f.config.HTTPSAddress != "" && f.config.HTTPSCertPath != "" && f.config.HTTPSKeyPath != "" {
+		//启动 HTTP 服务器
 		go func() {
-			log.Printf("%s Starting HTTPS server on %s", f.config.Name, f.config.HTTPSAddress)
-			httpsServer := &http.Server{
-				Addr:         f.config.HTTPSAddress,
-				Handler:      f.GetServer(),
-				ReadTimeout:  f.config.ReadTimeout,
-				WriteTimeout: f.config.WriteTimeout,
-				IdleTimeout:  f.config.IdleTimeout,
-				TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
-			}
-			if err := httpsServer.ListenAndServeTLS(f.config.HTTPSCertPath, f.config.HTTPSKeyPath); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("HTTPS server error: %v", err)
+			log.Printf("%s Starting HTTP server on %s", f.config.Name, f.addr)
+			if err := srv.Serve(web); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("HTTP server error: %v", f.config.Name, err)
 			}
 		}()
+
+		if f.config.HTTPSAddress != "" && f.config.HTTPSCertPath != "" && f.config.HTTPSKeyPath != "" {
+			go func() {
+				log.Printf("%s Starting HTTPS server on %s", f.config.Name, f.config.HTTPSAddress)
+				httpsServer := &http.Server{
+					Handler:      f.GetServer(),
+					ReadTimeout:  f.config.ReadTimeout,
+					WriteTimeout: f.config.WriteTimeout,
+					IdleTimeout:  f.config.IdleTimeout,
+					TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
+				}
+
+				if err := httpsServer.ServeTLS(web, f.config.HTTPSCertPath, f.config.HTTPSKeyPath); err != nil && err != http.ErrServerClosed {
+					log.Fatalf("HTTPS server error: %v", err)
+				}
+			}()
+		}
 	}
-	grand.Stop()
-	c := make(chan os.Signal, 1)
-	// 我们将在接收到 SIGINT (Ctrl+C) 时接受优雅关闭
-	// SIGKILL, SIGQUIT 或 SIGTERM (Ctrl+/) 将不会被捕获。
-	signal.Notify(c, os.Interrupt)
 
-	// 阻塞直到我们接收到信号。
-	<-c
-
-	// 创建一个等待的截止时间。
-	ctx, cancel := context.WithTimeout(context.Background(), wait)
-	defer cancel()
-	// 如果没有连接，不会阻塞，否则将等待
-	// 直到超时截止时间。
-	srv.Shutdown(ctx)
-	// 可选地，你可以在一个 goroutine 中运行 srv.Shutdown 并阻塞在
-	// <-ctx.Done() 上，如果你的应用程序应该等待其他服务
-	// 基于上下文取消来完成。
-	log.Println("shutting down")
-	os.Exit(0)
+	return nil
 }
 
 // PrintAPIRoutes 输出所有注册的API访问地址

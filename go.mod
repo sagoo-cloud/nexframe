@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.1
 
 require (
-	github.com/ServiceWeaver/weaver v0.24.4
+	github.com/ServiceWeaver/weaver v0.24.5
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/arl/statsviz v0.6.0
 	github.com/coocood/freecache v1.2.4
