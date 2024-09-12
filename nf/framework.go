@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ServiceWeaver/weaver"
 	"github.com/go-openapi/spec"
@@ -580,8 +581,8 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 		// 启动 HTTP 服务器
 		go func() {
 			log.Printf("%s Starting HTTP server on %s", f.config.Name, f.addr)
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("HTTP server error: %v", f.config.Name, err)
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("HTTP server error: %s,%v", f.config.Name, err)
 			}
 		}()
 
@@ -596,7 +597,7 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 					IdleTimeout:  f.config.IdleTimeout,
 					TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
 				}
-				if err := httpsServer.ListenAndServeTLS(f.config.HTTPSCertPath, f.config.HTTPSKeyPath); err != nil && err != http.ErrServerClosed {
+				if err := httpsServer.ListenAndServeTLS(f.config.HTTPSCertPath, f.config.HTTPSKeyPath); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					log.Fatalf("HTTPS server error: %v", err)
 				}
 			}()
@@ -622,8 +623,8 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 		//启动 HTTP 服务器
 		go func() {
 			log.Printf("%s Starting HTTP server on %s", f.config.Name, f.addr)
-			if err := srv.Serve(web); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("HTTP server error: %v", f.config.Name, err)
+			if err := srv.Serve(web); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("HTTP server error: %s,%v", f.config.Name, err)
 			}
 		}()
 
