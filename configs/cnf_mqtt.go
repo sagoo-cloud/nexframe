@@ -1,15 +1,5 @@
 package configs
 
-const (
-	MqttHost         = "mqtt.host"
-	MattUsername     = "mqtt.username"
-	MqttPassword     = "mqtt.password"
-	MqttClientID     = "mqtt.client_id"
-	MqttParallel     = "mqtt.parallel"
-	MqttSubscribeQos = "mqtt.subscribe_qos"
-	MqttPublishQos   = "mqtt.publish_qos"
-)
-
 type MqttConfig struct {
 	Host         string `json:"host"`
 	UserName     string `json:"user_name"`

@@ -9,8 +9,8 @@ import (
 type ServerConfig struct {
 	Name string
 
-	Address string
-
+	Address       string
+	Host          string
 	HTTPSAddress  string
 	HTTPSCertPath string
 	HTTPSKeyPath  string
@@ -129,6 +129,8 @@ type ServerConfig struct {
 	PProfEnabled bool   // PProfEnabled 启用 PProf 功能。
 	PProfPattern string // PProfPattern 指定路由器的 PProf 服务模式。
 
+	StatsVizEnabled bool   // StatsVizEnabled 启用 StatsViz 功能。
+	StatsVizPort    string // StatsVizPort 指定 StatsViz 服务端口。
 	// ======================================================================================================
 	// API & Swagger.
 	// ======================================================================================================
@@ -146,40 +148,11 @@ type staticPathItem struct {
 	Path   string // 静态路径。
 }
 
-const (
-	ServerName              = "server.name"
-	ServerAddress           = "server.address"
-	ServerHTTPSAddress      = "server.httpsAddress"
-	ServerHTTPSCertPath     = "server.httpsCertPath"
-	ServerHTTPSKeyPath      = "server.httpsKeyPath"
-	ServerReadTimeout       = "server.readTimeout"
-	ServerWriteTimeout      = "server.writeTimeout"
-	ServerIdleTimeout       = "server.idleTimeout"
-	ServerMaxHeaderBytes    = "server.maxHeaderBytes"
-	ServerKeepAlive         = "server.keepAlive"
-	ServerServerAgent       = "server.serverAgent"
-	ServerIndexFiles        = "server.indexFiles"
-	ServerIndexFolder       = "server.indexFolder"
-	ServerServerRoot        = "server.serverRoot"
-	ServerSearchPaths       = "server.searchPaths"
-	ServerFileServerEnabled = "server.fileServerEnabled"
-	ServerPProfEnabled      = "server.pprofEnabled"
-	ServerPProfPattern      = "server.pprofPattern"
-
-	ServerCookieMaxAge = "server.cookie.maxAge"
-	ServerCookiePath   = "server.cookie.path"
-	ServerCookieDomain = "server.cookie.domain"
-
-	ServerSessionIdName       = "server.session.idName"
-	ServerSessionMaxAge       = "server.session.maxAge"
-	ServerSessionCookieMaxAge = "server.session.cookieMaxAge"
-	ServerSessionCookieOutput = "server.session.cookieOutput"
-)
-
 func LoadServerConfig() *ServerConfig {
 
 	return &ServerConfig{
 		Name:              EnvString(ServerName, "server"),
+		Host:              EnvString(ServerHost, ":8081"),
 		Address:           EnvString(ServerAddress, ":8081"),
 		HTTPSAddress:      EnvString(ServerHTTPSAddress, ":43"),
 		HTTPSKeyPath:      EnvString(ServerHTTPSKeyPath, ""),
@@ -199,6 +172,8 @@ func LoadServerConfig() *ServerConfig {
 		FileServerEnabled: EnvBool(ServerFileServerEnabled, false),
 		PProfEnabled:      EnvBool(ServerPProfEnabled, false),
 		PProfPattern:      EnvString(ServerPProfPattern, "/debug/pprof/"),
+		StatsVizEnabled:   EnvBool(ServerStatsVizEnabled, false),
+		StatsVizPort:      EnvString(ServerStatsVizPort, ":8088"),
 
 		CookieMaxAge: EnvDuration(ServerCookieMaxAge, time.Hour*24*365),
 		CookiePath:   EnvString(ServerCookiePath, "/"),

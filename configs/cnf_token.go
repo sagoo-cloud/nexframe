@@ -7,8 +7,8 @@ type TokenConfig struct {
 
 func LoadTokenConfig() *TokenConfig {
 	config := &TokenConfig{
-		Key: EnvString("token.key", "CXEREHKHHP54PXKYTS2E"),
-		Exp: int64(EnvInt("token.exp", 2592000)),
+		Key: EnvString(TokenKey, "CXEREHKHHP54PXKYTS2E"),
+		Exp: int64(EnvInt(TokenExp, 2592000)),
 	}
 	return config
 }

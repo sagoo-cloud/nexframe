@@ -9,6 +9,7 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/gorilla/mux"
 	"github.com/sagoo-cloud/nexframe/configs"
+	"github.com/sagoo-cloud/nexframe/contracts"
 	"github.com/sagoo-cloud/nexframe/nf/g"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"github.com/sagoo-cloud/nexframe/utils/grand"
@@ -46,6 +47,7 @@ type Controller interface {
 // APIFramework 核心框架结构
 type APIFramework struct {
 	config         *configs.ServerConfig
+	Host           string
 	addr           string
 	router         *mux.Router
 	definitions    map[string]APIDefinition
@@ -330,13 +332,7 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 		}
 
 		if err := g.Validator().Data(req).Run(context.Background()); err != nil {
-			log.Printf("Validation error: %v", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if err := g.Validator().Data(req).Run(context.Background()); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			contracts.JsonExit(w, 400, "验证失败: "+err.Error())
 			return
 		}
 
@@ -354,12 +350,12 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 		// 处理响应
 		if len(results) > 1 && !results[1].IsNil() {
 			err := results[1].Interface().(error)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			contracts.JsonExit(w, 500, "内部服务器错误: "+err.Error())
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(results[0].Interface())
+		// 成功响应
+		contracts.JsonExit(w, 0, "Success", results[0].Interface())
 	}
 }
 
@@ -571,9 +567,16 @@ func (f *APIFramework) Run() {
 	flag.DurationVar(&wait, "graceful-timeout", time.Second*15, "the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
 	flag.Parse()
 
+	if f.addr == "" {
+		f.addr = f.config.Address
+	}
+	if f.host == "" {
+		f.host = f.config.Host
+	}
+
 	// 创建 HTTP 服务器
 	srv := &http.Server{
-		Addr:         f.config.Address,
+		Addr:         f.addr,
 		Handler:      f.GetServer(),
 		ReadTimeout:  f.config.ReadTimeout,
 		WriteTimeout: f.config.WriteTimeout,
@@ -582,7 +585,7 @@ func (f *APIFramework) Run() {
 
 	// 启动 HTTP 服务器
 	go func() {
-		log.Printf("%s Starting HTTP server on %s", f.config.Name, f.config.Address)
+		log.Printf("%s Starting HTTP server on %s", f.config.Name, f.addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("HTTP server error: %v", f.config.Name, err)
 		}

@@ -8,7 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/sagoo-cloud/nexframe/auth"
-	"github.com/sagoo-cloud/nexframe/nf/middleware"
+	"github.com/sagoo-cloud/nexframe/middleware"
 	"log"
 	"net/http"
 	"time"

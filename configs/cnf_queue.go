@@ -2,13 +2,6 @@ package configs
 
 import "time"
 
-const (
-	QueueInterval    = "queue.interval"
-	QueuePrefix      = "queue.prefix"
-	QueueListen      = "queue.listen"
-	QueueConcurrency = "queue.concurrency"
-)
-
 type QueueConfig struct {
 	Prefix      string
 	Listen      []string
