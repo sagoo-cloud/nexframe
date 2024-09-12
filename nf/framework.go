@@ -559,8 +559,48 @@ func (f *APIFramework) SetHost(host string) {
 }
 
 func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
+	if f.addr == "" {
+		f.addr = f.config.Address
+	}
 	if f.host == "" {
 		f.host = f.config.Host
+	}
+
+	if len(httpServes) == 0 {
+
+		// 创建 HTTP 服务器
+		srv := &http.Server{
+			Addr:         f.addr,
+			Handler:      f.GetServer(),
+			ReadTimeout:  f.config.ReadTimeout,
+			WriteTimeout: f.config.WriteTimeout,
+			IdleTimeout:  f.config.IdleTimeout,
+		}
+
+		// 启动 HTTP 服务器
+		go func() {
+			log.Printf("%s Starting HTTP server on %s", f.config.Name, f.addr)
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("HTTP server error: %v", f.config.Name, err)
+			}
+		}()
+
+		if f.config.HTTPSAddress != "" && f.config.HTTPSCertPath != "" && f.config.HTTPSKeyPath != "" {
+			go func() {
+				log.Printf("%s Starting HTTPS server on %s", f.config.Name, f.config.HTTPSAddress)
+				httpsServer := &http.Server{
+					Addr:         f.config.HTTPSAddress,
+					Handler:      f.GetServer(),
+					ReadTimeout:  f.config.ReadTimeout,
+					WriteTimeout: f.config.WriteTimeout,
+					IdleTimeout:  f.config.IdleTimeout,
+					TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
+				}
+				if err := httpsServer.ListenAndServeTLS(f.config.HTTPSCertPath, f.config.HTTPSKeyPath); err != nil && err != http.ErrServerClosed {
+					log.Fatalf("HTTPS server error: %v", err)
+				}
+			}()
+		}
 	}
 
 	for _, web := range httpServes {
