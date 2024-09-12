@@ -568,7 +568,6 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 		n := len(addr) - 1
 		addPort := ":" + addr[n]
 		f.SetPort(addPort)
-		log.Printf("Sagooiot HTTP Service %s", addPort)
 		swaggerUrl := fmt.Sprintf("http://localhost%s/swagger/index.html", addPort)
 		log.Printf(swaggerUrl)
 
