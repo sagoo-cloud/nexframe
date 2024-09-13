@@ -649,14 +649,16 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 	return nil
 }
 
+const dumpTextFormat = ` %s   |    %s     |      %s         `
+
 // PrintAPIRoutes 输出所有注册的API访问地址
 func (f *APIFramework) PrintAPIRoutes() {
 	fmt.Println("Registered API Routes:")
-	fmt.Println("----------------------")
+	fmt.Println("| Method | Path                       | Summary                 \n----------------------------------------------------------------------------")
 
 	var routes []string
 	for _, def := range f.definitions {
-		route := fmt.Sprintf("%s %s - %s", def.Meta.Method, def.Meta.Path, def.Meta.Summary)
+		route := fmt.Sprintf(dumpTextFormat, def.Meta.Method, def.Meta.Path, def.Meta.Summary)
 		routes = append(routes, route)
 	}
 
@@ -665,6 +667,6 @@ func (f *APIFramework) PrintAPIRoutes() {
 
 	for _, route := range routes {
 		fmt.Println(route)
+		fmt.Println("----------------------------------------------------------------------------")
 	}
-	fmt.Println("----------------------")
 }
