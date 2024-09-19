@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"fmt"
 	"github.com/sagoo-cloud/nexframe/os/command/args"
 	"github.com/spf13/viper"
 	"strings"
@@ -53,8 +54,14 @@ func loadFromToml(fileName ...string) *config {
 	c.AddConfigPath("../../")
 	c.AddConfigPath("./config/")
 	c.AddConfigPath("../config/")
+	c.AddConfigPath("../../config/")
+	c.AddConfigPath("../../../config/")
 	c.SetConfigType("toml")
-	c.ReadInConfig()
+	err := c.ReadInConfig()
+	if err != nil {
+		fmt.Println("config file error: ", err)
+		return nil
+	}
 	return c
 }
 func (c *ConfigEntity) GetConfig() *viper.Viper {
