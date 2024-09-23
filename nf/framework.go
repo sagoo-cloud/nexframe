@@ -223,6 +223,10 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 			prefixStr := convert.String(prefix)
 			fullPath := strings.TrimRight(prefixStr, "/") + "/" + strings.TrimLeft(metaData["path"], "/")
 
+			// 生成参数并添加调试输出
+			parameters := f.generateParameters(reqType)
+			log.Printf("Generated parameters for %s: %+v", handlerName, parameters)
+
 			apiDef := APIDefinition{
 				HandlerName:  handlerName,
 				RequestType:  reqType,
@@ -233,10 +237,13 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 					Summary: metaData["summary"],
 					Tags:    metaData["tags"],
 				},
-				Parameters: f.generateParameters(reqType),
+				Parameters: parameters,
 			}
 
 			f.definitions[handlerName] = apiDef
+
+			// 更新 Swagger 规范
+			f.updateSwaggerSpec(apiDef)
 
 			if f.debug {
 				fmt.Printf("Discovered API: %s %s - %s\n", apiDef.Meta.Method, fullPath, apiDef.Meta.Summary)
@@ -245,6 +252,52 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 	}
 
 	return nil
+}
+
+func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
+	path := f.swaggerSpec.Paths.Paths[apiDef.Meta.Path]
+
+	log.Printf("Updating Swagger spec for path: %s", apiDef.Meta.Path)
+	log.Printf("Parameters: %+v", apiDef.Parameters)
+
+	operation := &spec.Operation{
+		OperationProps: spec.OperationProps{
+			Summary:     apiDef.Meta.Summary,
+			Description: apiDef.Meta.Summary,
+			Tags:        strings.Split(apiDef.Meta.Tags, ","),
+			Parameters:  apiDef.Parameters, // 直接使用生成的参数
+			Responses: &spec.Responses{
+				ResponsesProps: spec.ResponsesProps{
+					StatusCodeResponses: map[int]spec.Response{
+						200: {
+							ResponseProps: spec.ResponseProps{
+								Description: "Successful response",
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"object"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	switch strings.ToUpper(apiDef.Meta.Method) {
+	case "GET":
+		path.Get = operation
+	case "POST":
+		path.Post = operation
+	case "PUT":
+		path.Put = operation
+	case "DELETE":
+		path.Delete = operation
+	}
+
+	f.swaggerSpec.Paths.Paths[apiDef.Meta.Path] = path
+	log.Printf("Updated Swagger spec for path: %s", apiDef.Meta.Path)
 }
 
 // extractMeta 从字段标签中提取元数据

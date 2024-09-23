@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-openapi/spec"
-	"github.com/sagoo-cloud/nexframe/utils/meta"
+	"github.com/sagoo-cloud/nexframe/nf/g"
 	"gorm.io/gorm"
 	"log"
 	"net/http"
@@ -18,7 +18,28 @@ import (
 
 // GenerateSwaggerJSON 生成完整的 Swagger JSON
 func (f *APIFramework) GenerateSwaggerJSON() (string, error) {
-	swagger := &spec.Swagger{
+	log.Println("Generating Swagger JSON")
+
+	// 重新初始化 Swagger 规范
+	f.initSwaggerSpec()
+
+	// 重新生成所有 API 定义
+	for _, def := range f.definitions {
+		f.updateSwaggerSpec(def)
+	}
+
+	// 将 Swagger 规范转换为 JSON
+	swaggerJSON, err := json.MarshalIndent(f.swaggerSpec, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("error marshaling Swagger JSON: %v", err)
+	}
+
+	log.Printf("Generated Swagger JSON: %s", string(swaggerJSON))
+	return string(swaggerJSON), nil
+}
+
+func (f *APIFramework) initSwaggerSpec() {
+	f.swaggerSpec = &spec.Swagger{
 		SwaggerProps: spec.SwaggerProps{
 			Swagger: "2.0",
 			Info: &spec.Info{
@@ -28,51 +49,11 @@ func (f *APIFramework) GenerateSwaggerJSON() (string, error) {
 					Version:     "1.0.0",
 				},
 			},
-			Paths:       new(spec.Paths),
-			Definitions: spec.Definitions{},
+			Paths: &spec.Paths{
+				Paths: make(map[string]spec.PathItem),
+			},
 		},
 	}
-
-	swagger.Paths = new(spec.Paths)
-	swagger.Paths.Paths = make(map[string]spec.PathItem)
-
-	for _, def := range f.definitions {
-		path := swagger.Paths.Paths[def.Meta.Path]
-		operation := &spec.Operation{
-			OperationProps: spec.OperationProps{
-				Summary:     def.Meta.Summary,
-				Description: def.Meta.Summary,
-				Tags:        strings.Split(def.Meta.Tags, ","),
-				Parameters:  def.Parameters, // 使用存储的参数
-				Responses:   f.generateResponses(def.ResponseType),
-			},
-		}
-
-		switch strings.ToUpper(def.Meta.Method) {
-		case "GET":
-			path.Get = operation
-		case "POST":
-			path.Post = operation
-		case "PUT":
-			path.Put = operation
-		case "DELETE":
-			path.Delete = operation
-		}
-
-		swagger.Paths.Paths[def.Meta.Path] = path
-
-		// 生成请求和响应的模型定义
-		f.generateModelDefinition(swagger, def.RequestType, def.HandlerName+"Request")
-		f.generateModelDefinition(swagger, def.ResponseType, def.HandlerName+"Response")
-	}
-
-	// 将 Swagger 规范转换为 JSON
-	swaggerJSON, err := json.MarshalIndent(swagger, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("error marshaling Swagger JSON: %v", err)
-	}
-
-	return string(swaggerJSON), nil
 }
 
 // generateParameters 生成 Swagger 参数定义
@@ -91,8 +72,8 @@ func (f *APIFramework) generateParameters(reqType reflect.Type) []spec.Parameter
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 
-			// 跳过 meta.Meta 字段
-			if field.Anonymous && field.Type == reflect.TypeOf(meta.Meta{}) {
+			// 跳过 g.Meta 字段
+			if field.Anonymous && field.Type == reflect.TypeOf(g.Meta{}) {
 				continue
 			}
 
@@ -105,7 +86,7 @@ func (f *APIFramework) generateParameters(reqType reflect.Type) []spec.Parameter
 			paramName := prefix + jsonTag
 
 			if field.Anonymous || (field.Type.Kind() == reflect.Struct && field.Type != reflect.TypeOf(time.Time{})) {
-				// 处理嵌入的结构体或普通结构体字段
+				// 处理嵌入字段和嵌套结构
 				generateParams(field.Type, prefix)
 			} else {
 				param := spec.Parameter{
@@ -164,8 +145,6 @@ func (f *APIFramework) getSwaggerType(t reflect.Type) string {
 		if t == reflect.TypeOf(time.Time{}) {
 			return "string"
 		}
-		return "object"
-	case reflect.Map:
 		return "object"
 	default:
 		return "string"
