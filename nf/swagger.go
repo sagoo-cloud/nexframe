@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-openapi/spec"
+	"github.com/sagoo-cloud/nexframe/utils/meta"
+	"gorm.io/gorm"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 )
 
 // GenerateSwaggerJSON 生成完整的 Swagger JSON
@@ -40,7 +43,7 @@ func (f *APIFramework) GenerateSwaggerJSON() (string, error) {
 				Summary:     def.Meta.Summary,
 				Description: def.Meta.Summary,
 				Tags:        strings.Split(def.Meta.Tags, ","),
-				Parameters:  f.generateParameters(def.RequestType),
+				Parameters:  def.Parameters, // 使用存储的参数
 				Responses:   f.generateResponses(def.ResponseType),
 			},
 		}
@@ -74,35 +77,125 @@ func (f *APIFramework) GenerateSwaggerJSON() (string, error) {
 
 // generateParameters 生成 Swagger 参数定义
 func (f *APIFramework) generateParameters(reqType reflect.Type) []spec.Parameter {
-	var parameters []spec.Parameter
-	reqType = reqType.Elem() // 因为我们使用指针类型
+	var params []spec.Parameter
+	processedTypes := make(map[reflect.Type]bool)
 
-	for i := 0; i < reqType.NumField(); i++ {
-		field := reqType.Field(i)
-		if field.Anonymous {
-			continue // 跳过匿名字段（如 Meta）
+	var generateParams func(t reflect.Type, prefix string)
+	generateParams = func(t reflect.Type, prefix string) {
+		if processedTypes[t] {
+			return // 避免循环引用
 		}
+		processedTypes[t] = true
 
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" {
-			jsonTag = strings.ToLower(field.Name)
-		}
+		t = deref(t)
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
 
-		param := spec.Parameter{
-			ParamProps: spec.ParamProps{
-				Name:        jsonTag,
-				In:          "query", // 默认为 query 参数，可以根据需要修改
-				Description: field.Tag.Get("description"),
-				Required:    strings.Contains(field.Tag.Get("v"), "required"),
-			},
-			SimpleSchema: spec.SimpleSchema{
-				Type: f.getSwaggerType(field.Type),
-			},
+			// 跳过 meta.Meta 字段
+			if field.Anonymous && field.Type == reflect.TypeOf(meta.Meta{}) {
+				continue
+			}
+
+			jsonTag := field.Tag.Get("json")
+			if jsonTag == "" {
+				jsonTag = strings.ToLower(field.Name)
+			}
+			jsonTag = strings.Split(jsonTag, ",")[0] // 处理 json tag 中的选项
+
+			paramName := prefix + jsonTag
+
+			if field.Anonymous || (field.Type.Kind() == reflect.Struct && field.Type != reflect.TypeOf(time.Time{})) {
+				// 处理嵌入的结构体或普通结构体字段
+				generateParams(field.Type, prefix)
+			} else {
+				param := spec.Parameter{
+					ParamProps: spec.ParamProps{
+						Name:        paramName,
+						In:          "query",
+						Description: field.Tag.Get("description"),
+						Required:    strings.Contains(field.Tag.Get("v"), "required"),
+					},
+					SimpleSchema: spec.SimpleSchema{
+						Type:   f.getSwaggerType(field.Type),
+						Format: f.getSwaggerFormat(field.Type),
+					},
+				}
+
+				// 处理指针类型
+				if field.Type.Kind() == reflect.Ptr {
+					param.SimpleSchema.Type = f.getSwaggerType(field.Type.Elem())
+					param.VendorExtensible.AddExtension("x-nullable", true)
+				}
+
+				// 处理数组类型
+				if field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array {
+					param.Type = "array"
+					param.Items = &spec.Items{
+						SimpleSchema: spec.SimpleSchema{
+							Type: f.getSwaggerType(field.Type.Elem()),
+						},
+					}
+				}
+
+				params = append(params, param)
+			}
 		}
-		parameters = append(parameters, param)
 	}
 
-	return parameters
+	generateParams(reqType, "")
+	return params
+}
+
+func (f *APIFramework) getSwaggerType(t reflect.Type) string {
+	t = deref(t)
+	switch t.Kind() {
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "integer"
+	case reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.String:
+		return "string"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	case reflect.Struct:
+		if t == reflect.TypeOf(time.Time{}) {
+			return "string"
+		}
+		return "object"
+	case reflect.Map:
+		return "object"
+	default:
+		return "string"
+	}
+}
+
+func (f *APIFramework) getSwaggerFormat(t reflect.Type) string {
+	t = deref(t)
+	switch t.Kind() {
+	case reflect.Int64, reflect.Uint64:
+		return "int64"
+	case reflect.Int32, reflect.Uint32:
+		return "int32"
+	case reflect.Float32:
+		return "float"
+	case reflect.Float64:
+		return "double"
+	default:
+		if t == reflect.TypeOf(time.Time{}) {
+			return "date-time"
+		}
+		return ""
+	}
+}
+
+func deref(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Ptr {
+		return t.Elem()
+	}
+	return t
 }
 
 // generateResponses 生成 Swagger 响应定义
@@ -125,14 +218,14 @@ func (f *APIFramework) generateResponses(respType reflect.Type) *spec.Responses 
 	}
 }
 
-// generateModelDefinition 生成模型定义
 func (f *APIFramework) generateModelDefinition(swagger *spec.Swagger, modelType reflect.Type, name string) {
-	modelType = modelType.Elem() // 因为我们使用指针类型
+	modelType = deref(modelType) // 处理指针类型
 	properties := make(map[string]spec.Schema)
 
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
 		if field.Anonymous {
+			// 处理匿名字段，如 g.Meta
 			continue
 		}
 
@@ -140,13 +233,13 @@ func (f *APIFramework) generateModelDefinition(swagger *spec.Swagger, modelType 
 		if jsonTag == "" {
 			jsonTag = strings.ToLower(field.Name)
 		}
+		jsonTag = strings.Split(jsonTag, ",")[0] // 处理 json tag 中的选项
 
-		properties[jsonTag] = spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type:        []string{f.getSwaggerType(field.Type)},
-				Description: field.Tag.Get("description"),
-			},
-		}
+		fieldType := field.Type
+		fieldSchema := f.getFieldSchema(swagger, fieldType, name+"_"+field.Name)
+
+		fieldSchema.SchemaProps.Description = field.Tag.Get("description")
+		properties[jsonTag] = fieldSchema
 	}
 
 	swagger.Definitions[name] = spec.Schema{
@@ -157,24 +250,29 @@ func (f *APIFramework) generateModelDefinition(swagger *spec.Swagger, modelType 
 	}
 }
 
-// getSwaggerType 将 Go 类型转换为 Swagger 类型
-func (f *APIFramework) getSwaggerType(t reflect.Type) string {
-	switch t.Kind() {
-	case reflect.Bool:
-		return "boolean"
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "integer"
-	case reflect.Float32, reflect.Float64:
-		return "number"
-	case reflect.String:
-		return "string"
-	case reflect.Slice:
-		return "array"
+func (f *APIFramework) getFieldSchema(swagger *spec.Swagger, fieldType reflect.Type, name string) spec.Schema {
+	fieldType = deref(fieldType) // 处理指针类型
+
+	switch fieldType.Kind() {
 	case reflect.Struct:
-		return "object"
+		if fieldType == reflect.TypeOf(time.Time{}) {
+			return spec.Schema{SchemaProps: spec.SchemaProps{Type: []string{"string"}, Format: "date-time"}}
+		}
+		if fieldType == reflect.TypeOf(gorm.DeletedAt{}) {
+			return spec.Schema{SchemaProps: spec.SchemaProps{Type: []string{"string"}, Format: "date-time", Nullable: true}}
+		}
+		f.generateModelDefinition(swagger, fieldType, name)
+		return spec.Schema{SchemaProps: spec.SchemaProps{Ref: spec.MustCreateRef("#/definitions/" + name)}}
+	case reflect.Slice:
+		itemSchema := f.getFieldSchema(swagger, fieldType.Elem(), name+"Item")
+		return spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type:  []string{"array"},
+				Items: &spec.SchemaOrArray{Schema: &itemSchema},
+			},
+		}
 	default:
-		return "string" // 默认为字符串类型
+		return spec.Schema{SchemaProps: spec.SchemaProps{Type: []string{f.getSwaggerType(fieldType)}}}
 	}
 }
 

@@ -19,6 +19,9 @@ func Env(key string, value ...interface{}) interface{} {
 }
 
 func EnvString(key string, value ...interface{}) string {
+	if cfg == nil {
+		return ""
+	}
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
 	var ret string
@@ -32,6 +35,9 @@ func EnvString(key string, value ...interface{}) string {
 	return ret
 }
 func EnvDuration(key string, value ...interface{}) time.Duration {
+	if cfg == nil {
+		return 0
+	}
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
 	var ret time.Duration
@@ -46,6 +52,9 @@ func EnvDuration(key string, value ...interface{}) time.Duration {
 }
 
 func EnvInt(key string, value ...interface{}) int {
+	if cfg == nil {
+		return 0
+	}
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
 	var ret int
@@ -59,6 +68,9 @@ func EnvInt(key string, value ...interface{}) int {
 	return ret
 }
 func EnvBool(key string, value ...interface{}) bool {
+	if cfg == nil {
+		return false
+	}
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
 	var ret bool
@@ -72,6 +84,9 @@ func EnvBool(key string, value ...interface{}) bool {
 	return ret
 }
 func EnvStringSlice(key string, value ...interface{}) []string {
+	if cfg == nil {
+		return []string{}
+	}
 	mode := args.Mode
 	modeKey := strings.Join([]string{mode, key}, ".")
 	var ret []string

@@ -34,6 +34,7 @@ type APIDefinition struct {
 	RequestType  reflect.Type
 	ResponseType reflect.Type
 	Meta         meta.Meta
+	Parameters   []spec.Parameter
 }
 
 // Controller 接口定义控制器的基本结构
@@ -232,6 +233,7 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 					Summary: metaData["summary"],
 					Tags:    metaData["tags"],
 				},
+				Parameters: f.generateParameters(reqType),
 			}
 
 			f.definitions[handlerName] = apiDef
@@ -568,7 +570,8 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 	}
 
 	if len(httpServes) == 0 {
-
+		swaggerUrl := fmt.Sprintf("API Doc: http://localhost%s/swagger/index.html", f.addr)
+		log.Printf(swaggerUrl)
 		// 创建 HTTP 服务器
 		srv := &http.Server{
 			Addr:         f.addr,
@@ -609,7 +612,7 @@ func (f *APIFramework) Run(httpServes ...weaver.Listener) (err error) {
 		n := len(addr) - 1
 		addPort := ":" + addr[n]
 		f.SetPort(addPort)
-		swaggerUrl := fmt.Sprintf("http://localhost%s/swagger/index.html", addPort)
+		swaggerUrl := fmt.Sprintf("API Doc: http://localhost%s/swagger/index.html", addPort)
 		log.Printf(swaggerUrl)
 
 		//创建 HTTP 服务器
