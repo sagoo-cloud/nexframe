@@ -24,46 +24,56 @@ var (
 	bufferChan chan []byte
 	// bufferPool 用于重用缓冲区
 	bufferPool sync.Pool
-	letters    = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") // 52
-	symbols    = []byte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")                   // 32
-	digits     = []byte("0123456789")                                           // 10
-	characters = append(append(letters, digits...), symbols...)                 // 94
-	// isRunning 用原子操作来保证并发安全
-	isRunning    int32
-	globalCtx    context.Context
+	// letters 包含所有字母字符
+	letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	// symbols 包含所有符号字符
+	symbols = []byte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+	// digits 包含所有数字字符
+	digits = []byte("0123456789")
+	// characters 包含所有字母、数字和符号字符
+	characters = append(append(letters, digits...), symbols...)
+	// isInitialized 表示随机数生成器是否已初始化
+	isInitialized int32
+	// globalCtx 是用于控制 generateRandomBytes goroutine 的上下文
+	globalCtx context.Context
+	// globalCancel 是用于取消 globalCtx 的函数
 	globalCancel context.CancelFunc
-	// 用于确保 init 只被调用一次
+	// initOnce 确保初始化只进行一次
 	initOnce sync.Once
 )
 
-// init 初始化随机数生成器
-func init() {
-	initOnce.Do(func() {
-		bufferChan = make(chan []byte, chanSize)
-		bufferPool = sync.Pool{
-			New: func() interface{} {
-				return make([]byte, bufferSize)
-			},
-		}
-		globalCtx, globalCancel = context.WithCancel(context.Background())
-		atomic.StoreInt32(&isRunning, 1)
-		go generateRandomBytes(globalCtx)
-	})
+// lazyInit 在需要时初始化随机数生成器
+func lazyInit() {
+	if atomic.LoadInt32(&isInitialized) == 0 {
+		initOnce.Do(func() {
+			bufferChan = make(chan []byte, chanSize)
+			bufferPool = sync.Pool{
+				New: func() interface{} {
+					return make([]byte, bufferSize)
+				},
+			}
+			globalCtx, globalCancel = context.WithCancel(context.Background())
+			go generateRandomBytes(globalCtx)
+			atomic.StoreInt32(&isInitialized, 1)
+		})
+	}
 }
 
-// Stop 停止随机数生成器
 func Stop() {
-	if atomic.CompareAndSwapInt32(&isRunning, 1, 0) {
-		globalCancel()
+	if atomic.CompareAndSwapInt32(&isInitialized, 1, 0) {
+		if globalCancel != nil {
+			globalCancel()
+		}
 		// 清空 bufferChan
 		for len(bufferChan) > 0 {
 			<-bufferChan
 		}
-		// 等待一小段时间，确保所有正在进行的操作都已完成
-		time.Sleep(time.Millisecond * 10)
+		// 重置 initOnce，允许再次初始化
+		initOnce = sync.Once{}
 	}
 }
 
+// generateRandomBytes 持续生成随机字节并将其发送到 bufferChan
 func generateRandomBytes(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -103,8 +113,9 @@ func generateRandomBytes(ctx context.Context) {
 	}
 }
 
-// getRandomBytes 从 bufferChan 中获取随机字节
+// getRandomBytes 从 bufferChan 获取随机字节
 func getRandomBytes() ([]byte, error) {
+	lazyInit()
 	select {
 	case b := <-bufferChan:
 		return b, nil
@@ -115,12 +126,12 @@ func getRandomBytes() ([]byte, error) {
 
 // Intn 返回一个介于0和max之间的随机整数: [0, max)
 func Intn(max int) int {
-	if atomic.LoadInt32(&isRunning) == 0 || max <= 0 {
+	if max <= 0 {
 		return 0
 	}
 	b, err := getRandomBytes()
 	if err != nil {
-		log.Printf("获取随机字节失败: %v", err)
+		log.Printf("获取随机字节失败: %v，返回默认值 0", err)
 		return 0
 	}
 	n := int(binary.LittleEndian.Uint32(b)) % max
@@ -147,14 +158,6 @@ func B(n int) []byte {
 	return b
 }
 
-// min 返回两个整数中的较小值
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // N 返回一个介于min和max之间的随机整数: [min, max]
 func N(min, max int) int {
 	if min >= max {
@@ -175,9 +178,11 @@ func S(n int, symbols ...bool) string {
 	} else {
 		src = letters
 	}
+
 	for i := range b {
 		b[i] = src[Intn(len(src))]
 	}
+
 	return string(b)
 }
 
@@ -246,4 +251,12 @@ func Meet(num, total int) bool {
 // MeetProb 计算给定概率是否满足
 func MeetProb(prob float32) bool {
 	return Intn(1e7) < int(prob*1e7)
+}
+
+// min 返回两个整数中的较小值
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

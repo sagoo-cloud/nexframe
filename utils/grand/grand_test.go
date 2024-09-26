@@ -1,7 +1,6 @@
 package grand
 
 import (
-	"context"
 	"math"
 	"strings"
 	"sync/atomic"
@@ -165,12 +164,7 @@ func TestMeetProb(t *testing.T) {
 }
 
 func TestStop(t *testing.T) {
-	// 重置状态
-	atomic.StoreInt32(&isRunning, 1)
-	globalCtx, globalCancel = context.WithCancel(context.Background())
-	go generateRandomBytes(globalCtx)
-
-	// 执行一些操作以确保 generateRandomBytes 已经开始生成随机数
+	// 执行一些操作以确保随机数生成器被初始化
 	for i := 0; i < 100; i++ {
 		Intn(100)
 	}
@@ -181,21 +175,31 @@ func TestStop(t *testing.T) {
 	// 等待一小段时间，让 goroutine 有机会停止
 	time.Sleep(time.Millisecond * 100)
 
-	// 检查 isRunning 是否已经被设置为 0
-	if atomic.LoadInt32(&isRunning) != 0 {
-		t.Error("Stop() 没有将 isRunning 设置为 0")
+	// 检查 isInitialized 是否已经被设置为 0
+	if atomic.LoadInt32(&isInitialized) != 0 {
+		t.Error("Stop() 没有将 isInitialized 设置为 0")
 	}
 
-	// 尝试再次生成随机数，应该会返回 0
+	// 尝试再次生成随机数，应该会触发重新初始化
 	n := Intn(100)
-	if n != 0 {
-		t.Errorf("停止后 Intn(100) 返回 %d，期望返回 0", n)
+
+	// 检查是否成功重新初始化
+	if atomic.LoadInt32(&isInitialized) != 1 {
+		t.Error("调用 Intn 后未能重新初始化")
 	}
 
-	// 重新初始化，以便其他测试可以正常运行
-	atomic.StoreInt32(&isRunning, 1)
-	globalCtx, globalCancel = context.WithCancel(context.Background())
-	go generateRandomBytes(globalCtx)
+	// 验证生成的随机数
+	if n == 0 {
+		t.Error("重新初始化后 Intn(100) 返回 0，这种情况的概率很低")
+	}
+
+	// 再次调用 Stop
+	Stop()
+
+	// 确保 Stop 生效
+	if atomic.LoadInt32(&isInitialized) != 0 {
+		t.Error("第二次调用 Stop() 后 isInitialized 不为 0")
+	}
 }
 
 // 辅助函数
