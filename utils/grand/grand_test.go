@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -13,7 +14,7 @@ func TestB(t *testing.T) {
 	for _, length := range lengths {
 		b := B(length)
 		if len(b) != length {
-			t.Errorf("B(%d) returned slice of length %d", length, len(b))
+			t.Errorf("B(%d) 返回的切片长度为 %d", length, len(b))
 		}
 	}
 }
@@ -31,7 +32,7 @@ func TestN(t *testing.T) {
 		for i := 0; i < 1000; i++ {
 			n := N(tc.min, tc.max)
 			if n < tc.min || n > tc.max {
-				t.Errorf("N(%d, %d) returned %d, which is out of range", tc.min, tc.max, n)
+				t.Errorf("N(%d, %d) 返回 %d，超出范围", tc.min, tc.max, n)
 			}
 		}
 	}
@@ -41,18 +42,19 @@ func TestS(t *testing.T) {
 	lengths := []int{10, 100, 1000}
 	for _, length := range lengths {
 		s := S(length)
+		t.Log(s)
 		if len(s) != length {
-			t.Errorf("S(%d) returned string of length %d", length, len(s))
+			t.Errorf("S(%d) 返回字符串长度为 %d", length, len(s))
 		}
 		if !isAlphanumeric(s) {
-			t.Errorf("S(%d) returned non-alphanumeric string: %s", length, s)
+			t.Errorf("S(%d) 返回非字母数字字符串: %s", length, s)
 		}
 	}
 
 	// 测试包含符号的情况
 	s := S(100, true)
 	if !containsSymbols(s) {
-		t.Errorf("S(100, true) did not return string with symbols: %s", s)
+		t.Errorf("S(100, true) 没有返回包含符号的字符串: %s", s)
 	}
 }
 
@@ -62,7 +64,7 @@ func TestD(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		d := D(min, max)
 		if d < min || d > max {
-			t.Errorf("D(%v, %v) returned %v, which is out of range", min, max, d)
+			t.Errorf("D(%v, %v) 返回 %v，超出范围", min, max, d)
 		}
 	}
 }
@@ -72,11 +74,11 @@ func TestStr(t *testing.T) {
 	length := 100
 	s := Str(source, length)
 	if len(s) != length {
-		t.Errorf("Str() returned string of length %d, expected %d", len(s), length)
+		t.Errorf("Str() 返回字符串长度为 %d，期望 %d", len(s), length)
 	}
 	for _, char := range s {
 		if !strings.ContainsRune(source, char) {
-			t.Errorf("Str() returned string containing unexpected character: %c", char)
+			t.Errorf("Str() 返回的字符串包含意外字符: %c", char)
 		}
 	}
 }
@@ -85,10 +87,10 @@ func TestDigits(t *testing.T) {
 	length := 100
 	s := Digits(length)
 	if len(s) != length {
-		t.Errorf("Digits(%d) returned string of length %d", length, len(s))
+		t.Errorf("Digits(%d) 返回字符串长度为 %d", length, len(s))
 	}
 	if !isNumeric(s) {
-		t.Errorf("Digits(%d) returned non-numeric string: %s", length, s)
+		t.Errorf("Digits(%d) 返回非数字字符串: %s", length, s)
 	}
 }
 
@@ -96,10 +98,10 @@ func TestLetters(t *testing.T) {
 	length := 100
 	s := Letters(length)
 	if len(s) != length {
-		t.Errorf("Letters(%d) returned string of length %d", length, len(s))
+		t.Errorf("Letters(%d) 返回字符串长度为 %d", length, len(s))
 	}
 	if !isAlphabetic(s) {
-		t.Errorf("Letters(%d) returned non-alphabetic string: %s", length, s)
+		t.Errorf("Letters(%d) 返回非字母字符串: %s", length, s)
 	}
 }
 
@@ -107,10 +109,10 @@ func TestSymbols(t *testing.T) {
 	length := 100
 	s := Symbols(length)
 	if len(s) != length {
-		t.Errorf("Symbols(%d) returned string of length %d", length, len(s))
+		t.Errorf("Symbols(%d) 返回字符串长度为 %d", length, len(s))
 	}
 	if !isSymbolic(s) {
-		t.Errorf("Symbols(%d) returned string without symbols: %s", length, s)
+		t.Errorf("Symbols(%d) 返回不包含符号的字符串: %s", length, s)
 	}
 }
 
@@ -118,15 +120,15 @@ func TestPerm(t *testing.T) {
 	n := 100
 	p := Perm(n)
 	if len(p) != n {
-		t.Errorf("Perm(%d) returned slice of length %d", n, len(p))
+		t.Errorf("Perm(%d) 返回切片长度为 %d", n, len(p))
 	}
 	seen := make(map[int]bool)
 	for _, v := range p {
 		if v < 0 || v >= n {
-			t.Errorf("Perm(%d) returned out of range value: %d", n, v)
+			t.Errorf("Perm(%d) 返回超出范围的值: %d", n, v)
 		}
 		if seen[v] {
-			t.Errorf("Perm(%d) returned duplicate value: %d", n, v)
+			t.Errorf("Perm(%d) 返回重复值: %d", n, v)
 		}
 		seen[v] = true
 	}
@@ -143,7 +145,7 @@ func TestMeet(t *testing.T) {
 	}
 	actual := float64(count) / float64(iterations)
 	if math.Abs(actual-threshold) > 0.05 {
-		t.Errorf("Meet(1, 2) probability is %f, expected around %f", actual, threshold)
+		t.Errorf("Meet(1, 2) 概率为 %f，期望接近 %f", actual, threshold)
 	}
 }
 
@@ -158,14 +160,13 @@ func TestMeetProb(t *testing.T) {
 	}
 	actual := float64(count) / float64(iterations)
 	if math.Abs(actual-threshold) > 0.05 {
-		t.Errorf("MeetProb(0.3) probability is %f, expected around %f", actual, threshold)
+		t.Errorf("MeetProb(0.3) 概率为 %f，期望接近 %f", actual, threshold)
 	}
 }
 
 func TestStop(t *testing.T) {
 	// 重置状态
-	stopped = false
-	stopChan = make(chan struct{})
+	atomic.StoreInt32(&isRunning, 1)
 	globalCtx, globalCancel = context.WithCancel(context.Background())
 	go generateRandomBytes(globalCtx)
 
@@ -180,31 +181,19 @@ func TestStop(t *testing.T) {
 	// 等待一小段时间，让 goroutine 有机会停止
 	time.Sleep(time.Millisecond * 100)
 
-	// 检查 globalCtx 是否已经被取消
-	select {
-	case <-globalCtx.Done():
-		// 这是预期的行为
-	default:
-		t.Error("Stop() did not cancel the global context")
+	// 检查 isRunning 是否已经被设置为 0
+	if atomic.LoadInt32(&isRunning) != 0 {
+		t.Error("Stop() 没有将 isRunning 设置为 0")
 	}
 
-	// 尝试再次生成随机数，应该会失败或阻塞
-	done := make(chan bool)
-	go func() {
-		Intn(100)
-		done <- true
-	}()
-
-	select {
-	case <-done:
-		t.Error("Random number generation succeeded after Stop()")
-	case <-time.After(time.Millisecond * 500):
-		// 这是预期的行为 - 生成随机数应该被阻塞或失败
+	// 尝试再次生成随机数，应该会返回 0
+	n := Intn(100)
+	if n != 0 {
+		t.Errorf("停止后 Intn(100) 返回 %d，期望返回 0", n)
 	}
 
 	// 重新初始化，以便其他测试可以正常运行
-	stopped = false
-	stopChan = make(chan struct{})
+	atomic.StoreInt32(&isRunning, 1)
 	globalCtx, globalCancel = context.WithCancel(context.Background())
 	go generateRandomBytes(globalCtx)
 }
@@ -221,7 +210,7 @@ func isAlphanumeric(s string) bool {
 }
 
 func containsSymbols(s string) bool {
-	return strings.ContainsAny(s, symbols)
+	return strings.ContainsAny(s, string(symbols))
 }
 
 func isNumeric(s string) bool {
@@ -244,7 +233,7 @@ func isAlphabetic(s string) bool {
 
 func isSymbolic(s string) bool {
 	for _, char := range s {
-		if !strings.ContainsRune(symbols, char) {
+		if !strings.ContainsRune(string(symbols), char) {
 			return false
 		}
 	}

@@ -5,7 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
+	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,19 +21,15 @@ const (
 
 var (
 	// bufferChan 存储随机字节的缓冲通道
-	bufferChan = make(chan []byte, chanSize)
+	bufferChan chan []byte
 	// bufferPool 用于重用缓冲区
-	bufferPool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, bufferSize)
-		},
-	}
-	letters      = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" // 52
-	symbols      = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"                   // 32
-	digits       = "0123456789"                                           // 10
-	characters   = letters + digits + symbols                             // 94
-	stopChan     = make(chan struct{})
-	stopped      bool
+	bufferPool sync.Pool
+	letters    = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") // 52
+	symbols    = []byte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")                   // 32
+	digits     = []byte("0123456789")                                           // 10
+	characters = append(append(letters, digits...), symbols...)                 // 94
+	// isRunning 用原子操作来保证并发安全
+	isRunning    int32
 	globalCtx    context.Context
 	globalCancel context.CancelFunc
 	// 用于确保 init 只被调用一次
@@ -40,37 +39,49 @@ var (
 // init 初始化随机数生成器
 func init() {
 	initOnce.Do(func() {
+		bufferChan = make(chan []byte, chanSize)
+		bufferPool = sync.Pool{
+			New: func() interface{} {
+				return make([]byte, bufferSize)
+			},
+		}
 		globalCtx, globalCancel = context.WithCancel(context.Background())
+		atomic.StoreInt32(&isRunning, 1)
 		go generateRandomBytes(globalCtx)
 	})
 }
+
+// Stop 停止随机数生成器
 func Stop() {
-	if !stopped {
-		if globalCancel != nil {
-			globalCancel()
-		}
-		close(stopChan)
+	if atomic.CompareAndSwapInt32(&isRunning, 1, 0) {
+		globalCancel()
 		// 清空 bufferChan
 		for len(bufferChan) > 0 {
 			<-bufferChan
 		}
-		stopped = true
+		// 等待一小段时间，确保所有正在进行的操作都已完成
+		time.Sleep(time.Millisecond * 10)
 	}
 }
 
 func generateRandomBytes(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Recovered in generateRandomBytes: %v", r)
+			// 重启 goroutine
+			go generateRandomBytes(ctx)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-stopChan:
 			return
 		default:
 			buffer := bufferPool.Get().([]byte)
 			n, err := rand.Read(buffer)
 			if err != nil {
-				// 使用错误日志记录而不是panic
-				// log.Error("从系统读取随机缓冲区时出错:", err)
+				log.Printf("从系统读取随机缓冲区时出错: %v", err)
 				time.Sleep(time.Millisecond * 100)
 				continue
 			}
@@ -78,8 +89,12 @@ func generateRandomBytes(ctx context.Context) {
 			for i := 0; i <= n-4; i += 4 {
 				select {
 				case bufferChan <- buffer[i : i+4]:
-				case <-stopChan:
+				case <-ctx.Done():
+					bufferPool.Put(buffer)
 					return
+				default:
+					// 如果 channel 已满，丢弃这个 buffer
+					break
 				}
 			}
 
@@ -88,14 +103,29 @@ func generateRandomBytes(ctx context.Context) {
 	}
 }
 
+// getRandomBytes 从 bufferChan 中获取随机字节
+func getRandomBytes() ([]byte, error) {
+	select {
+	case b := <-bufferChan:
+		return b, nil
+	case <-time.After(time.Second):
+		return nil, errors.New("获取随机字节超时")
+	}
+}
+
 // Intn 返回一个介于0和max之间的随机整数: [0, max)
 func Intn(max int) int {
-	if max <= 0 {
-		return max
+	if atomic.LoadInt32(&isRunning) == 0 || max <= 0 {
+		return 0
 	}
-	n := int(binary.LittleEndian.Uint32(<-bufferChan)) % max
-	if (max > 0 && n < 0) || (max < 0 && n > 0) {
-		return -n
+	b, err := getRandomBytes()
+	if err != nil {
+		log.Printf("获取随机字节失败: %v", err)
+		return 0
+	}
+	n := int(binary.LittleEndian.Uint32(b)) % max
+	if n < 0 {
+		n = -n
 	}
 	return n
 }
@@ -105,14 +135,22 @@ func B(n int) []byte {
 	if n <= 0 {
 		return nil
 	}
-	i := 0
 	b := make([]byte, n)
-	for {
-		copy(b[i:], <-bufferChan)
-		i += 4
-		if i >= n {
-			break
+	for i := 0; i < n; i += 4 {
+		randomBytes, err := getRandomBytes()
+		if err != nil {
+			log.Printf("获取随机字节失败: %v", err)
+			continue
 		}
+		copy(b[i:], randomBytes[:min(4, n-i)])
+	}
+	return b
+}
+
+// min 返回两个整数中的较小值
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
 	return b
 }
@@ -122,10 +160,7 @@ func N(min, max int) int {
 	if min >= max {
 		return min
 	}
-	if min >= 0 {
-		return Intn(max-min+1) + min
-	}
-	return Intn(max+(0-min)+1) - (0 - min)
+	return Intn(max-min+1) + min
 }
 
 // S 返回一个包含数字和字母的随机字符串，长度为n
@@ -133,32 +168,23 @@ func S(n int, symbols ...bool) string {
 	if n <= 0 {
 		return ""
 	}
-	var (
-		b           = make([]byte, n)
-		numberBytes = B(n)
-	)
+	b := make([]byte, n)
+	var src []byte
+	if len(symbols) > 0 && symbols[0] {
+		src = characters
+	} else {
+		src = letters
+	}
 	for i := range b {
-		if len(symbols) > 0 && symbols[0] {
-			b[i] = characters[numberBytes[i]%94]
-		} else {
-			b[i] = characters[numberBytes[i]%62]
-		}
+		b[i] = src[Intn(len(src))]
 	}
 	return string(b)
 }
 
 // D 返回一个介于min和max之间的随机时间间隔
 func D(min, max time.Duration) time.Duration {
-	multiple := int64(1)
-	if min != 0 {
-		for min%10 == 0 {
-			multiple *= 10
-			min /= 10
-			max /= 10
-		}
-	}
 	n := int64(N(int(min), int(max)))
-	return time.Duration(n * multiple)
+	return time.Duration(n)
 }
 
 // Str 从给定的字符串s中随机选择n个字符
@@ -166,64 +192,37 @@ func Str(s string, n int) string {
 	if n <= 0 {
 		return ""
 	}
-	var (
-		b     = make([]rune, n)
-		runes = []rune(s)
-	)
-	if len(runes) <= 255 {
-		numberBytes := B(n)
-		for i := range b {
-			b[i] = runes[int(numberBytes[i])%len(runes)]
-		}
-	} else {
-		for i := range b {
-			b[i] = runes[Intn(len(runes))]
-		}
+	runes := []rune(s)
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = runes[Intn(len(runes))]
 	}
 	return string(b)
 }
 
 // Digits 返回一个只包含数字的随机字符串，长度为n
 func Digits(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	var (
-		b           = make([]byte, n)
-		numberBytes = B(n)
-	)
-	for i := range b {
-		b[i] = digits[numberBytes[i]%10]
-	}
-	return string(b)
+	return randomString(n, digits)
 }
 
 // Letters 返回一个只包含字母的随机字符串，长度为n
 func Letters(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	var (
-		b           = make([]byte, n)
-		numberBytes = B(n)
-	)
-	for i := range b {
-		b[i] = letters[numberBytes[i]%52]
-	}
-	return string(b)
+	return randomString(n, letters)
 }
 
 // Symbols 返回一个只包含符号的随机字符串，长度为n
 func Symbols(n int) string {
+	return randomString(n, symbols)
+}
+
+// randomString 是一个通用的随机字符串生成函数
+func randomString(n int, charset []byte) string {
 	if n <= 0 {
 		return ""
 	}
-	var (
-		b           = make([]byte, n)
-		numberBytes = B(n)
-	)
+	b := make([]byte, n)
 	for i := range b {
-		b[i] = symbols[numberBytes[i]%32]
+		b[i] = charset[Intn(len(charset))]
 	}
 	return string(b)
 }
