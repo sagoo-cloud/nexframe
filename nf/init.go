@@ -56,6 +56,7 @@ func (f *APIFramework) Init() {
 
 	// 应用上下文中间件
 	f.router.Use(f.createContextMiddleware())
+	f.router.Use(f.domainCheckMiddleware)
 
 	for i, mw := range f.middlewares {
 		if f.debug {

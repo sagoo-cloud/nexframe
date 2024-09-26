@@ -117,6 +117,7 @@ func (f *APIFramework) createContextMiddleware() func(next http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+			ctx = context.WithValue(ctx, contracts.CtxKeyForRequest, r)
 			f.contextMu.RLock()
 			for k, v := range f.contextValues {
 				ctx = context.WithValue(ctx, k, v)
@@ -125,6 +126,56 @@ func (f *APIFramework) createContextMiddleware() func(next http.Handler) http.Ha
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// RequestFromCtx retrieves and returns the Request object from context.
+func RequestFromCtx(ctx context.Context) *http.Request {
+	if v := ctx.Value(contracts.CtxKeyForRequest); v != nil {
+		return v.(*http.Request)
+	}
+	return nil
+}
+
+// domainCheckMiddleware 获取访问的域名信息的中间件
+func (f *APIFramework) domainCheckMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+
+		if strings.Contains(host, ":") {
+			host = strings.Split(host, ":")[0]
+		}
+
+		parts := strings.Split(host, ".")
+
+		var subDomain, secondLevel, topLevel string
+
+		switch len(parts) {
+		case 1:
+			secondLevel = parts[0]
+			topLevel = ""
+		case 2:
+			secondLevel = parts[0]
+			topLevel = parts[1]
+		case 3:
+			subDomain = parts[0]
+			secondLevel = parts[1]
+			topLevel = parts[2]
+		default:
+			subDomain = strings.Join(parts[:len(parts)-2], ".")
+			secondLevel = parts[len(parts)-2]
+			topLevel = parts[len(parts)-1]
+		}
+
+		domainInfo := &contracts.DomainInfo{
+			FullDomain:  host,
+			SubDomain:   subDomain,
+			SecondLevel: secondLevel,
+			TopLevel:    topLevel,
+		}
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, contracts.DomainInfoCode, domainInfo)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // EnableDebug 启用调试模式
@@ -225,7 +276,9 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 
 			// 生成参数并添加调试输出
 			parameters := f.generateParameters(reqType)
-			log.Printf("Generated parameters for %s: %+v", handlerName, parameters)
+			if f.debug {
+				log.Printf("Generated parameters for %s: %+v", handlerName, parameters)
+			}
 
 			apiDef := APIDefinition{
 				HandlerName:  handlerName,
@@ -257,8 +310,10 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
 	path := f.swaggerSpec.Paths.Paths[apiDef.Meta.Path]
 
-	log.Printf("Updating Swagger spec for path: %s", apiDef.Meta.Path)
-	log.Printf("Parameters: %+v", apiDef.Parameters)
+	if f.debug {
+		log.Printf("Updating Swagger spec for path: %s \n", apiDef.Meta.Path)
+		log.Printf("Parameters: %+v \n", apiDef.Parameters)
+	}
 
 	operation := &spec.Operation{
 		OperationProps: spec.OperationProps{
@@ -297,7 +352,9 @@ func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
 	}
 
 	f.swaggerSpec.Paths.Paths[apiDef.Meta.Path] = path
-	log.Printf("Updated Swagger spec for path: %s", apiDef.Meta.Path)
+	if f.debug {
+		log.Printf("Updated Swagger spec for path: %s \n", apiDef.Meta.Path)
+	}
 }
 
 // extractMeta 从字段标签中提取元数据

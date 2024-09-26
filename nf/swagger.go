@@ -33,8 +33,10 @@ func (f *APIFramework) GenerateSwaggerJSON() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error marshaling Swagger JSON: %v", err)
 	}
+	if f.debug {
+		log.Printf("Generated Swagger JSON: %s", string(swaggerJSON))
 
-	log.Printf("Generated Swagger JSON: %s", string(swaggerJSON))
+	}
 	return string(swaggerJSON), nil
 }
 
