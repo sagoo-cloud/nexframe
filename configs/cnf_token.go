@@ -1,14 +1,26 @@
 package configs
 
+import "time"
+
 type TokenConfig struct {
-	Key string `json:"key"`
-	Exp int64  `json:"exp"`
+	SigningKey         interface{}   `json:"signingKey"`         // 用于签名的密钥
+	TokenLookup        string        `json:"tokenLookup"`        // 定义如何查找令牌
+	Method             string        `json:"signingMethod"`      // 签名方法
+	BufferTime         time.Duration `json:"bufferTime"`         // 生效时间
+	ExpiresTime        time.Duration `json:"expiresTime"`        // 过期时间
+	Issuer             string        `json:"issuer"`             // 签发者
+	RefreshExpiresTime time.Duration `json:"refreshExpiresTime"` // 刷新令牌过期时间
 }
 
 func LoadTokenConfig() *TokenConfig {
 	config := &TokenConfig{
-		Key: EnvString(TokenKey, "CXEREHKHHP54PXKYTS2E"),
-		Exp: int64(EnvInt(TokenExp, 2592000)),
+		SigningKey:         EnvString(TokenSigningKey, "CXEREHKHHP54PXKYTS2E"),
+		TokenLookup:        EnvString(TokenTokenLookup, "header:Authorization"),
+		Method:             EnvString(TokenSigningMethod, "HS256"),
+		BufferTime:         EnvDuration(TokenBufferTime, "15m"),
+		ExpiresTime:        EnvDuration(TokenExpiresTime, "24h"),
+		Issuer:             EnvString(TokenIssuer, "sagoo"),
+		RefreshExpiresTime: EnvDuration(TokenRefreshExpiresTime, "48h"),
 	}
 	return config
 }

@@ -46,7 +46,12 @@ func EnvDuration(key string, value ...interface{}) time.Duration {
 	} else if cfg.IsSet(key) {
 		ret = cfg.GetDuration(key)
 	} else {
-		ret = value[0].(time.Duration)
+		switch value[0].(type) {
+		case string:
+			ret, _ = time.ParseDuration(value[0].(string))
+		default:
+			ret = value[0].(time.Duration)
+		}
 	}
 	return ret
 }

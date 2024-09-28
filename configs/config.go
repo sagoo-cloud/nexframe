@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/sagoo-cloud/nexframe/os/command/args"
 	"github.com/spf13/viper"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +61,12 @@ func loadFromToml(fileName ...string) *config {
 	err := c.ReadInConfig()
 	if err != nil {
 		fmt.Println("config file error: ", err)
-		return nil
+		// 配置文件不存在，创建一个空的配置文件
+		err := c.WriteConfigAs("config.toml")
+		if err != nil {
+			log.Fatalf("Error writing config file: %v", err)
+		}
+		return c
 	}
 	return c
 }
