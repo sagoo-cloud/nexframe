@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var testSecretKey = []byte("test-secret-key")
+var testSecretKey = []byte("30e074ea-8435-4c69-bb09-d6f1d8ad85a6")
 
 // TestNewMiddleware 测试创建新的中间件实例
 func TestNewMiddleware(t *testing.T) {
@@ -180,9 +180,6 @@ func TestCreateAndSendToken(t *testing.T) {
 	token, err := GenerateToken(string(testSecretKey), WithClaims(func() jwt.Claims {
 		return &TokenClaims{
 			Username: "testuser",
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-			},
 		}
 	}))
 	if err != nil {
@@ -242,7 +239,7 @@ func TestCustomErrorHandler(t *testing.T) {
 func createToken(t *testing.T, username string, expiration time.Duration) string {
 	token, err := GenerateToken(string(testSecretKey), WithClaims(func() jwt.Claims {
 		return &TokenClaims{
-			Username: "testuser",
+			Username: username,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
 			},
@@ -251,6 +248,5 @@ func createToken(t *testing.T, username string, expiration time.Duration) string
 	if err != nil {
 		t.Fatalf("创建令牌失败: %v", err)
 	}
-
 	return token
 }

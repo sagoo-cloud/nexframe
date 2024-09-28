@@ -5,9 +5,11 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type authKey struct{}
@@ -31,11 +33,20 @@ var (
 	ErrGetKey                 = errors.New("Can not get key while signing token")
 )
 
+var (
+	issuer                    = "qmPlus"
+	bufferTime  time.Duration = -time.Second
+	expiresTime time.Duration = 7 * 24 * time.Hour
+)
+
 // JwtConfig 定义了 JWT 中间件的配置
 type JwtConfig struct {
 	SigningKey    interface{} // 用于签名的密钥
 	TokenLookup   string      // 定义如何查找令牌
 	SigningMethod string      // 签名方法
+	BufferTime    string      // 生效时间
+	ExpiresTime   string      // 过期时间
+	Issuer        string      // 签发者
 	ErrHandler    func(w http.ResponseWriter, r *http.Request, err error)
 }
 
@@ -64,6 +75,22 @@ func New(config JwtConfig) (*jwtMiddleware, error) {
 	if config.ErrHandler == nil {
 		config.ErrHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
+		}
+	}
+	var err error
+	if config.Issuer != "" {
+		issuer = config.Issuer
+	}
+	if config.BufferTime != "" {
+		bufferTime, err = time.ParseDuration(config.BufferTime)
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing bufferTime: %v", err)
+		}
+	}
+	if config.ExpiresTime != "" {
+		expiresTime, err = time.ParseDuration(config.ExpiresTime)
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing expiresTime: %v", err)
 		}
 	}
 	return &jwtMiddleware{
@@ -180,9 +207,27 @@ func FromContext(ctx context.Context) (token jwt.Claims, ok bool) {
 }
 
 func GenerateToken(key string, opts ...Option) (string, error) {
-	o := &options{signingMethod: jwt.SigningMethodHS256}
+	o := &options{
+		claims: func() jwt.Claims {
+			return &TokenClaims{}
+		},
+		signingMethod: jwt.SigningMethodHS256,
+	}
 	for _, opt := range opts {
 		opt(o)
+	}
+
+	if claims, ok := o.claims().(*TokenClaims); ok {
+		if claims.Issuer == "" {
+			claims.Issuer = issuer
+		}
+		if claims.NotBefore == nil {
+			claims.NotBefore = jwt.NewNumericDate(time.Now().Add(bufferTime))
+		}
+		if claims.ExpiresAt == nil {
+			claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(expiresTime))
+		}
+		return jwt.NewWithClaims(o.signingMethod, claims).SignedString([]byte(key))
 	}
 	return jwt.NewWithClaims(o.signingMethod, o.claims()).SignedString([]byte(key))
 }
@@ -190,16 +235,16 @@ func GenerateToken(key string, opts ...Option) (string, error) {
 // ParseJwtToken 解析和验证令牌
 func ParseJwtToken(jwtToken string, opts ...Option) (jwt.Claims, error) {
 	var (
-		tokenInfo *jwt.Token
 		err       error
+		tokenInfo *jwt.Token
+		o         = &options{
+			claims: func() jwt.Claims {
+				return &TokenClaims{}
+			},
+			signingMethod: jwt.SigningMethodHS256,
+		}
 	)
 
-	o := &options{
-		claims: func() jwt.Claims {
-			return &TokenClaims{}
-		},
-		signingMethod: jwt.SigningMethodHS256,
-	}
 	for _, opt := range opts {
 		opt(o)
 	}
