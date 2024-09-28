@@ -2,66 +2,64 @@ package nf
 
 import (
 	"fmt"
-	"io"
-	"io/fs"
+	"github.com/sagoo-cloud/nexframe/os/file"
 	"net/http"
 	"path/filepath"
 	"strings"
 )
 
-// NewStaticHandler 创建静态文件处理器
-func (f *APIFramework) NewStaticHandler(fs fs.FS, dir string) *StaticHandler {
-	return &StaticHandler{FS: fs, Directory: dir}
+// noListingFileSystem 包装 http.FileSystem，禁止目录列表
+type noListingFileSystem struct {
+	fs http.FileSystem
 }
 
-// SetFileSystem 设置文件系统
-func (f *APIFramework) SetFileSystem(fs fs.FS) *APIFramework {
-	f.fileSystem = fs
+// Open 重写 Open 方法以禁止目录列表
+func (nfs noListingFileSystem) Open(path string) (http.File, error) {
+	f, err := nfs.fs.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if s.IsDir() {
+		index := filepath.Join(path, "index.html")
+		if _, err := nfs.fs.Open(index); err != nil {
+			f.Close()
+			return nil, err
+		}
+	}
+
+	return f, nil
+}
+
+// SetServerRoot 设置文档根目录用于静态服务
+func (f *APIFramework) SetServerRoot(root string) *APIFramework {
+	var realPath string
+	if p, err := file.Search(root); err != nil {
+		fmt.Printf(`SetServerRoot failed: %+v \n`, err)
+		realPath = root
+	} else {
+		realPath = p
+	}
+
+	f.wwwRoot = strings.TrimRight(realPath, file.Separator)
+	f.config.FileServerEnabled = true
 	return f
 }
 
-// StaticHandler 处理静态文件的结构
-type StaticHandler struct {
-	FS        fs.FS
-	Directory string
+// NewStaticHandler 创建静态文件处理器
+func (f *APIFramework) NewStaticHandler(fs http.FileSystem, dir string) http.Handler {
+	return http.FileServer(noListingFileSystem{fs})
 }
 
-// ServeHTTP 实现 http.Handler 接口
-func (sh *StaticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(sh.Directory, strings.TrimPrefix(r.URL.Path, "/"+sh.Directory+"/"))
-	file, err := sh.FS.Open(path)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if stat.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
-
-	// 设置 Content-Type
-	contentType := getContentType(path)
-	w.Header().Set("Content-Type", contentType)
-
-	// 设置 Content-Length
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
-
-	// 如果是 GET 请求，发送文件内容
-	if r.Method == "GET" {
-		_, err = io.Copy(w, file)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
+// SetFileSystem 设置文件系统
+func (f *APIFramework) SetFileSystem(fs http.FileSystem) *APIFramework {
+	f.fileSystem = fs
+	return f
 }
 
 // getContentType 根据文件扩展名获取 MIME 类型

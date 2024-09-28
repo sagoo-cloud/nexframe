@@ -12,10 +12,10 @@ import (
 	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/contracts"
 	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/os/file"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
 	"io"
-	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -55,7 +55,7 @@ type APIFramework struct {
 	middlewares    []mux.MiddlewareFunc
 	staticDir      string
 	wwwRoot        string
-	fileSystem     fs.FS
+	fileSystem     http.FileSystem
 	debug          bool
 	initialized    bool
 	initOnce       sync.Once
@@ -203,7 +203,15 @@ func (f *APIFramework) SetStaticDir(dir string) *APIFramework {
 
 // SetWebRoot 设置Web根目录
 func (f *APIFramework) SetWebRoot(dir string) *APIFramework {
-	f.wwwRoot = dir
+	var realPath string
+	if p, err := file.Search(dir); err != nil {
+		fmt.Printf(`SetStaticRoot failed: %+v \n`, err)
+		realPath = dir
+	} else {
+		realPath = p
+	}
+
+	f.wwwRoot = strings.TrimRight(realPath, file.Separator)
 	return f
 }
 
