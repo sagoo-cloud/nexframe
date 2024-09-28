@@ -7,10 +7,18 @@ import (
 	"github.com/sagoo-cloud/nexframe/configs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// JWTMiddleware 接口定义
+type JWTMiddleware interface {
+	Middleware(next http.Handler) http.Handler
+	GenerateTokenPair(username string) (*TokenPair, error)
+	RefreshToken(refreshToken string) (*TokenPair, error)
+}
 
 // 自定义错误
 var (
@@ -19,7 +27,21 @@ var (
 	ErrTokenExpired           = errors.New("JWT令牌已过期")
 	ErrTokenParseFail         = errors.New("解析JWT令牌失败")
 	ErrUnSupportSigningMethod = errors.New("不支持的签名方法")
+	ErrInvalidTokenType       = errors.New("非访问令牌")
 )
+
+// 在 jwtMiddleware 结构体外部定义 TokenClaims 的对象池
+var tokenClaimsPool = sync.Pool{
+	New: func() interface{} {
+		return &TokenClaims{}
+	},
+}
+
+// TokenPair 结构体用于存储访问令牌和刷新令牌
+type TokenPair struct {
+	AccessToken  string
+	RefreshToken string
+}
 
 type authKey struct{}
 
@@ -31,7 +53,8 @@ type AuthClaims interface {
 
 // TokenClaims 实现了 AuthClaims 接口
 type TokenClaims struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
+	TokenType string `json:"token_type"` // "access" 或 "refresh"
 	jwt.RegisteredClaims
 }
 
@@ -113,27 +136,26 @@ func (jm *jwtMiddleware) Middleware(next http.Handler) http.Handler {
 }
 
 func (jm *jwtMiddleware) initializeTokenExtractor() error {
+	extractors := map[string]func(*http.Request, string) (string, error){
+		"header": extractTokenFromHeader,
+		"query":  extractTokenFromQuery,
+		"cookie": extractTokenFromCookie,
+	}
+
 	parts := strings.Split(jm.conf.TokenLookup, ":")
 	if len(parts) != 2 {
 		return fmt.Errorf("无效的令牌查找配置: %s", jm.conf.TokenLookup)
 	}
 
-	switch parts[0] {
-	case "header":
-		jm.extractToken = func(r *http.Request) (string, error) {
-			return extractTokenFromHeader(r, parts[1])
-		}
-	case "query":
-		jm.extractToken = func(r *http.Request) (string, error) {
-			return extractTokenFromQuery(r, parts[1])
-		}
-	case "cookie":
-		jm.extractToken = func(r *http.Request) (string, error) {
-			return extractTokenFromCookie(r, parts[1])
-		}
-	default:
+	extractor, ok := extractors[parts[0]]
+	if !ok {
 		return fmt.Errorf("不支持的令牌查找方法: %s", parts[0])
 	}
+
+	jm.extractToken = func(r *http.Request) (string, error) {
+		return extractor(r, parts[1])
+	}
+
 	return nil
 }
 
@@ -166,9 +188,14 @@ func extractTokenFromCookie(r *http.Request, name string) (string, error) {
 }
 
 func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Method != jm.conf.SigningMethod {
-			return nil, fmt.Errorf("%w: %v", ErrUnSupportSigningMethod, token.Method)
+	claims := tokenClaimsPool.Get().(*TokenClaims)
+	defer tokenClaimsPool.Put(claims)
+
+	*claims = TokenClaims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Method.Alg() != jm.conf.SigningMethod.Alg() {
+			return nil, ErrUnSupportSigningMethod
 		}
 		return jm.conf.SigningKey, nil
 	})
@@ -184,28 +211,77 @@ func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
 		return nil, ErrTokenInvalid
 	}
 
-	if claims, ok := token.Claims.(*TokenClaims); ok {
-		return claims, nil
+	// 移除这个检查，因为我们现在处理两种类型的令牌
+	// if claims.TokenType != "access" {
+	//     return nil, ErrInvalidTokenType
+	// }
+
+	returnClaims := &TokenClaims{
+		Username:         claims.Username,
+		TokenType:        claims.TokenType,
+		RegisteredClaims: claims.RegisteredClaims,
 	}
 
-	return nil, ErrTokenInvalid
+	return returnClaims, nil
 }
 
-// GenerateToken 生成新的JWT令牌
-func (jm *jwtMiddleware) GenerateToken(username string) (string, error) {
+// GenerateTokenPair 生成新的JWT令牌
+func (jm *jwtMiddleware) GenerateTokenPair(username string) (*TokenPair, error) {
+	accessToken, err := jm.createToken(username, "access", jm.conf.ExpiresTime)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, err := jm.createToken(username, "refresh", jm.conf.RefreshExpiresTime)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenPair{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (jm *jwtMiddleware) createToken(username, tokenType string, expiration time.Duration) (string, error) {
 	now := time.Now()
 	claims := &TokenClaims{
-		Username: username,
+		Username:  username,
+		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(jm.conf.ExpiresTime)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
 			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now), // 将 NotBefore 设置为当前时间
+			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    jm.conf.Issuer,
 		},
 	}
 
 	token := jwt.NewWithClaims(jm.conf.SigningMethod, claims)
 	return token.SignedString(jm.conf.SigningKey)
+}
+
+// RefreshToken 方法用于刷新访问令牌
+func (jm *jwtMiddleware) RefreshToken(refreshToken string) (*TokenPair, error) {
+	claims, err := jm.parseJwtToken(refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenClaims, ok := claims.(*TokenClaims)
+	if !ok {
+		return nil, ErrTokenInvalid
+	}
+
+	if tokenClaims.TokenType != "refresh" {
+		return nil, ErrInvalidTokenType
+	}
+
+	// 检查刷新令牌是否过期
+	if tokenClaims.ExpiresAt != nil && tokenClaims.ExpiresAt.Before(time.Now()) {
+		return nil, ErrTokenExpired
+	}
+
+	return jm.GenerateTokenPair(tokenClaims.Username)
 }
 
 // NewAuthContext 将认证声明添加到上下文中

@@ -48,16 +48,13 @@ func TestMiddleware(t *testing.T) {
 	r.Handle("/protected", middleware.Middleware(protectedHandler)).Methods("GET")
 
 	t.Run("ValidToken", func(t *testing.T) {
-		token, err := middleware.GenerateToken("testuser")
+		tokenPair, err := middleware.GenerateTokenPair("testuser")
 		if err != nil {
-			t.Fatalf("生成令牌失败: %v", err)
+			t.Fatalf("生成令牌对失败: %v", err)
 		}
 
-		// 添加一个小的延迟，以确保令牌生效
-		time.Sleep(time.Second)
-
 		req := httptest.NewRequest("GET", "/protected", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Authorization", "Bearer "+tokenPair.AccessToken)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -107,7 +104,7 @@ func TestMiddleware(t *testing.T) {
 
 func TestTokenExtraction(t *testing.T) {
 	middleware, _ := NewJwt()
-	token, _ := middleware.GenerateToken("testuser")
+	tokenPair, _ := middleware.GenerateTokenPair("testuser")
 
 	testCases := []struct {
 		name        string
@@ -117,7 +114,7 @@ func TestTokenExtraction(t *testing.T) {
 		{
 			name: "从头部提取",
 			setToken: func(r *http.Request) {
-				r.Header.Set("Authorization", "Bearer "+token)
+				r.Header.Set("Authorization", "Bearer "+tokenPair.AccessToken)
 			},
 			expectError: false,
 		},
@@ -131,7 +128,7 @@ func TestTokenExtraction(t *testing.T) {
 		{
 			name: "无效的令牌格式",
 			setToken: func(r *http.Request) {
-				r.Header.Set("Authorization", "InvalidFormat "+token)
+				r.Header.Set("Authorization", "InvalidFormat "+tokenPair.AccessToken)
 			},
 			expectError: true,
 		},
@@ -205,11 +202,42 @@ func TestGetCurrentUser(t *testing.T) {
 	}
 }
 
+func TestRefreshToken(t *testing.T) {
+	middleware, _ := NewJwt()
+
+	t.Run("ValidRefreshToken", func(t *testing.T) {
+		tokenPair, _ := middleware.GenerateTokenPair("testuser")
+		newTokenPair, err := middleware.RefreshToken(tokenPair.RefreshToken)
+		if err != nil {
+			t.Fatalf("刷新令牌失败: %v", err)
+		}
+		if newTokenPair.AccessToken == "" || newTokenPair.RefreshToken == "" {
+			t.Error("新的令牌对不应为空")
+		}
+	})
+
+	t.Run("ExpiredRefreshToken", func(t *testing.T) {
+		expiredToken := createExpiredToken(t, middleware)
+		_, err := middleware.RefreshToken(expiredToken)
+		if err == nil {
+			t.Error("使用过期的刷新令牌应该失败")
+		}
+	})
+
+	t.Run("InvalidRefreshToken", func(t *testing.T) {
+		_, err := middleware.RefreshToken("invalid-token")
+		if err == nil {
+			t.Error("使用无效的刷新令牌应该失败")
+		}
+	})
+}
+
 // createExpiredToken 是一个辅助函数，用于创建过期的测试令牌
 func createExpiredToken(t *testing.T, middleware *jwtMiddleware) string {
 	now := time.Now().Add(-time.Hour) // 设置为1小时前
 	claims := &TokenClaims{
-		Username: "testuser",
+		Username:  "testuser",
+		TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
