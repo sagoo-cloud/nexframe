@@ -8,7 +8,7 @@ import (
 
 // JwtMiddleware JWT 中间件
 func JwtMiddleware(config auth.JwtConfig) mux.MiddlewareFunc {
-	jwtMiddleware, err := auth.New(config)
+	jwtMiddleware, err := auth.NewJwt()
 	if err != nil {
 		log.Fatal(err)
 	}
