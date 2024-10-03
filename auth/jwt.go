@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/sagoo-cloud/nexframe/configs"
 )
 
@@ -19,6 +19,11 @@ type JWTMiddleware interface {
 	GenerateTokenPair(username string) (*TokenPair, error)
 	RefreshToken(refreshToken string) (*TokenPair, error)
 }
+
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
 
 // 自定义错误
 var (
@@ -146,9 +151,9 @@ func (jm *jwtMiddleware) Middleware(next http.Handler) http.Handler {
 // initializeTokenExtractor 初始化令牌提取器
 func (jm *jwtMiddleware) initializeTokenExtractor() error {
 	extractors := map[string]func(*http.Request, string) (string, error){
-		"header": extractTokenFromHeader,
-		"query":  extractTokenFromQuery,
-		"cookie": extractTokenFromCookie,
+		"header": extractTokenFromHeader, // 从请求头提取令牌
+		"query":  extractTokenFromQuery,  // 从查询参数提取令牌
+		"cookie": extractTokenFromCookie, // 从cookie提取令牌
 	}
 
 	parts := strings.SplitN(jm.conf.TokenLookup, ":", 2)
@@ -235,12 +240,12 @@ func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
 
 // GenerateTokenPair 生成新的JWT令牌对
 func (jm *jwtMiddleware) GenerateTokenPair(username string) (*TokenPair, error) {
-	accessToken, err := jm.createToken(username, "access", jm.conf.ExpiresTime)
+	accessToken, err := jm.createToken(username, TokenTypeAccess, jm.conf.ExpiresTime)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := jm.createToken(username, "refresh", jm.conf.RefreshExpiresTime)
+	refreshToken, err := jm.createToken(username, TokenTypeRefresh, jm.conf.RefreshExpiresTime)
 	if err != nil {
 		return nil, err
 	}

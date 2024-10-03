@@ -35,6 +35,7 @@ type APIDefinition struct {
 	ResponseType reflect.Type
 	Meta         meta.Meta
 	Parameters   []spec.Parameter
+	Responses    *spec.Responses
 }
 
 // Controller 接口定义控制器的基本结构
@@ -94,6 +95,7 @@ func NewAPIFramework() *APIFramework {
 				Paths: &spec.Paths{
 					Paths: make(map[string]spec.PathItem),
 				},
+				Definitions: make(map[string]spec.Schema),
 			},
 		},
 	}
@@ -262,11 +264,13 @@ func (f *APIFramework) RegisterController(prefix string, controllers ...interfac
 
 // discoverAPIs 自动发现并注册 API
 func (f *APIFramework) discoverAPIs(controllerName string, controller interface{}) error {
+	log.Printf("Discovering APIs for controller: %s", controllerName)
 	controllerType := reflect.TypeOf(controller)
 	for i := 0; i < controllerType.NumMethod(); i++ {
 		method := controllerType.Method(i)
+		log.Printf("Examining method: %s", method.Name)
 		if method.Type.NumIn() != 3 || method.Type.NumOut() != 2 {
-			continue // 跳过不符合预期签名的方法
+			continue
 		}
 
 		reqType := method.Type.In(2)
@@ -282,11 +286,9 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 			prefixStr := convert.String(prefix)
 			fullPath := strings.TrimRight(prefixStr, "/") + "/" + strings.TrimLeft(metaData["path"], "/")
 
-			// 生成参数并添加调试输出
 			parameters := f.generateParameters(reqType)
-			if f.debug {
-				log.Printf("Generated parameters for %s: %+v", handlerName, parameters)
-			}
+			responses := f.generateResponses(respType)
+			log.Printf("Generated responses for method %s: %+v", method.Name, responses)
 
 			apiDef := APIDefinition{
 				HandlerName:  handlerName,
@@ -299,11 +301,11 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 					Tags:    metaData["tags"],
 				},
 				Parameters: parameters,
+				Responses:  responses,
 			}
 
 			f.definitions[handlerName] = apiDef
-
-			// 更新 Swagger 规范
+			log.Printf("Added API definition for handler: %s", handlerName)
 			f.updateSwaggerSpec(apiDef)
 
 			if f.debug {
@@ -316,11 +318,19 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 }
 
 func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
-	path := f.swaggerSpec.Paths.Paths[apiDef.Meta.Path]
+	log.Printf("Updating Swagger spec for path: %s", apiDef.Meta.Path)
 
-	if f.debug {
-		log.Printf("Updating Swagger spec for path: %s \n", apiDef.Meta.Path)
-		log.Printf("Parameters: %+v \n", apiDef.Parameters)
+	// 确保 Paths 已初始化
+	if f.swaggerSpec.Paths == nil {
+		f.swaggerSpec.Paths = &spec.Paths{
+			Paths: make(map[string]spec.PathItem),
+		}
+	}
+
+	// 获取或创建 PathItem
+	path, ok := f.swaggerSpec.Paths.Paths[apiDef.Meta.Path]
+	if !ok {
+		path = spec.PathItem{}
 	}
 
 	operation := &spec.Operation{
@@ -328,25 +338,12 @@ func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
 			Summary:     apiDef.Meta.Summary,
 			Description: apiDef.Meta.Summary,
 			Tags:        strings.Split(apiDef.Meta.Tags, ","),
-			Parameters:  apiDef.Parameters, // 直接使用生成的参数
-			Responses: &spec.Responses{
-				ResponsesProps: spec.ResponsesProps{
-					StatusCodeResponses: map[int]spec.Response{
-						200: {
-							ResponseProps: spec.ResponseProps{
-								Description: "Successful response",
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Type: []string{"object"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			Parameters:  apiDef.Parameters,
+			Responses:   apiDef.Responses,
 		},
 	}
+
+	log.Printf("Created operation for path %s: %+v", apiDef.Meta.Path, operation)
 
 	switch strings.ToUpper(apiDef.Meta.Method) {
 	case "GET":
@@ -360,9 +357,20 @@ func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
 	}
 
 	f.swaggerSpec.Paths.Paths[apiDef.Meta.Path] = path
-	if f.debug {
-		log.Printf("Updated Swagger spec for path: %s \n", apiDef.Meta.Path)
+
+	// 确保 Definitions 已初始化
+	if f.swaggerSpec.Definitions == nil {
+		f.swaggerSpec.Definitions = make(map[string]spec.Schema)
 	}
+
+	// 添加响应模型到 Definitions
+	if apiDef.Responses != nil && apiDef.Responses.StatusCodeResponses[200].Schema != nil {
+		modelName := apiDef.HandlerName + "Response"
+		f.swaggerSpec.Definitions[modelName] = *apiDef.Responses.StatusCodeResponses[200].Schema
+		log.Printf("Added response model to Definitions: %s", modelName)
+	}
+
+	log.Printf("Updated Swagger spec for path: %s", apiDef.Meta.Path)
 }
 
 // extractMeta 从字段标签中提取元数据
@@ -409,7 +417,8 @@ func (f *APIFramework) GetController(name string) (interface{}, bool) {
 func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-
+		// 设置固定的 Server 头部
+		w.Header().Set("Server", "NexFrame")
 		// 创建请求对象
 		reqValue := reflect.New(def.RequestType.Elem())
 		req := reqValue.Interface()
@@ -471,8 +480,17 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 			return
 		}
 
-		// 成功响应
-		contracts.JsonExit(w, 0, "Success", results[0].Interface())
+		// 设置自定义头部信息
+		if headers, ok := results[0].Interface().(contracts.ResponseWithHeaders); ok {
+			for key, value := range headers.Headers {
+				w.Header().Set(key, value)
+			}
+			// 成功响应
+			contracts.JsonExit(w, 0, "Success", headers.Data)
+		} else {
+			// 成功响应（没有自定义头部）
+			contracts.JsonExit(w, 0, "Success", results[0].Interface())
+		}
 	}
 }
 

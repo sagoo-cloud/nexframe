@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+type ResponseWithHeaders struct {
+	Headers map[string]string
+	Data    interface{}
+}
+
 // JsonRes 数据返回通用JSON数据结构
 type JsonRes struct {
 	Code    int         `json:"code"`    // 错误码((0:成功, 1:失败, >1:错误码))
