@@ -33,8 +33,7 @@ func (f *APIFramework) GenerateSwaggerJSON() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error marshaling Swagger JSON: %v", err)
 	}
-	log.Printf("Full Swagger spec before JSON conversion: %+v", f.swaggerSpec)
-	log.Printf("Generated Swagger JSON: %s", string(swaggerJSON))
+	f.debugOutput("swagger.json", string(swaggerJSON))
 	return string(swaggerJSON), nil
 }
 
@@ -179,10 +178,9 @@ func deref(t reflect.Type) reflect.Type {
 
 // generateResponses 生成 Swagger 响应定义
 func (f *APIFramework) generateResponses(respType reflect.Type) *spec.Responses {
-	log.Printf("Generating responses for type: %v", respType)
+	f.debugOutput("Generating responses for type: %v", respType)
 	schema := f.generateDetailedResponseSchema(respType, 0, make(map[reflect.Type]bool))
-	log.Printf("Generated schema for responses: %+v", schema)
-
+	f.debugOutput("Generated schema for responses: %+v", schema)
 	return &spec.Responses{
 		ResponsesProps: spec.ResponsesProps{
 			StatusCodeResponses: map[int]spec.Response{
@@ -200,9 +198,9 @@ func (f *APIFramework) generateResponses(respType reflect.Type) *spec.Responses 
 const maxDepth = 10
 
 func (f *APIFramework) generateDetailedResponseSchema(fieldType reflect.Type, depth int, visited map[reflect.Type]bool) *spec.Schema {
-	log.Printf("Generating detailed response schema for type: %v, depth: %d", fieldType, depth)
+	f.debugOutput("Generating detailed response schema for type: %v, depth: %d", fieldType, depth)
 	if depth > maxDepth {
-		log.Printf("Max depth reached for type: %v", fieldType)
+		f.debugOutput("Max depth reached for type: %v", fieldType)
 		return &spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type:        []string{"object"},
@@ -214,7 +212,7 @@ func (f *APIFramework) generateDetailedResponseSchema(fieldType reflect.Type, de
 	fieldType = deref(fieldType)
 
 	if visited[fieldType] {
-		log.Printf("Circular reference detected for type: %v", fieldType)
+		f.debugOutput("Circular reference detected for type: %v", fieldType)
 		return &spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type:        []string{"object"},
@@ -262,39 +260,39 @@ func (f *APIFramework) generateDetailedResponseSchema(fieldType reflect.Type, de
 			},
 		}
 	}
-	log.Printf("Generated schema for type %v: %+v", fieldType, schema)
+	f.debugOutput("Generated schema for type %v: %+v", fieldType, schema)
 	return schema
 }
 
 func (f *APIFramework) generateSchemaForStruct(t reflect.Type, depth int, visited map[reflect.Type]bool) *spec.Schema {
-	log.Printf("Generating schema for struct: %v, depth: %d", t, depth)
+	f.debugOutput("Generating schema for struct: %v, depth: %d", t, depth)
 	properties := make(map[string]spec.Schema)
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		log.Printf("Processing field: %s", field.Name)
+		f.debugOutput("Processing field: %s", field.Name)
 		if field.PkgPath != "" && !field.Anonymous { // 忽略未导出字段
-			log.Printf("Skipping unexported field: %s", field.Name)
+			f.debugOutput("Skipping unexported field: %s", field.Name)
 			continue
 		}
 
 		jsonTag := field.Tag.Get("json")
 		if jsonTag == "-" {
-			log.Printf("Skipping field %s due to json:\"-\" tag", field.Name)
+			f.debugOutput("Skipping field %s due to json:\"-\" tag", field.Name)
 			continue
 		}
 
 		propertyName := getPropertyName(field)
-		log.Printf("Property name for field %s: %s", field.Name, propertyName)
+		f.debugOutput("Property name for field %s: %s", field.Name, propertyName)
 		fieldSchema := f.generateDetailedResponseSchema(field.Type, depth+1, visited)
 		if fieldSchema != nil {
 			newSchema := *fieldSchema
 			if description := field.Tag.Get("description"); description != "" {
 				newSchema.Description = description
-				log.Printf("Added description for field %s: %s", field.Name, description)
+				f.debugOutput("Added description for field %s: %s", field.Name, description)
 			}
 			properties[propertyName] = newSchema
 		} else {
-			log.Printf("Warning: nil schema generated for field %s", field.Name)
+			f.debugOutput("Warning: nil schema generated for field %s", field.Name)
 		}
 	}
 
@@ -304,7 +302,7 @@ func (f *APIFramework) generateSchemaForStruct(t reflect.Type, depth int, visite
 			Properties: properties,
 		},
 	}
-	log.Printf("Generated schema for struct %v: %+v", t, schema)
+	f.debugOutput("Generated schema for struct %v: %+v", t, schema)
 	return schema
 }
 
@@ -427,7 +425,7 @@ func (f *APIFramework) saveSwaggerJSON() {
 	if err != nil {
 		log.Fatalf("Error generating Swagger JSON: %v", err)
 	}
-	log.Println("swaggerJson:", swaggerJson)
+	f.debugOutput("Swagger JSON: %s", swaggerJson)
 	// 获取当前工作目录
 	currentDir, err := os.Getwd()
 	if err != nil {

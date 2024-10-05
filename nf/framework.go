@@ -95,7 +95,7 @@ func NewAPIFramework() *APIFramework {
 				Paths: &spec.Paths{
 					Paths: make(map[string]spec.PathItem),
 				},
-				Definitions: make(map[string]spec.Schema),
+				//Definitions: make(map[string]spec.Schema),
 			},
 		},
 	}
@@ -190,9 +190,7 @@ func (f *APIFramework) EnableDebug() *APIFramework {
 func (f *APIFramework) WithMiddleware(middlewares ...mux.MiddlewareFunc) *APIFramework {
 	for _, middleware := range middlewares {
 		f.middlewares = append(f.middlewares, middleware)
-		if f.debug {
-			log.Printf("Added middleware: %T\n", middleware)
-		}
+		f.debugOutput("Added middleware: %T\n", middleware)
 	}
 	return f
 }
@@ -254,9 +252,7 @@ func (f *APIFramework) RegisterController(prefix string, controllers ...interfac
 			return fmt.Errorf("failed to discover APIs for controller %s: %v", controllerName, err)
 		}
 
-		if f.debug {
-			fmt.Printf("Registered controller: %s with prefix: %s\n", controllerName, prefix)
-		}
+		f.debugOutput("Registered controller: %s with prefix: %s\n", controllerName, prefix)
 	}
 
 	return nil
@@ -264,11 +260,11 @@ func (f *APIFramework) RegisterController(prefix string, controllers ...interfac
 
 // discoverAPIs 自动发现并注册 API
 func (f *APIFramework) discoverAPIs(controllerName string, controller interface{}) error {
-	log.Printf("Discovering APIs for controller: %s", controllerName)
+	f.debugOutput("Discovering APIs for controller: %s\n", controllerName)
 	controllerType := reflect.TypeOf(controller)
 	for i := 0; i < controllerType.NumMethod(); i++ {
 		method := controllerType.Method(i)
-		log.Printf("Examining method: %s", method.Name)
+		f.debugOutput("Examining method: %s\n", method.Name)
 		if method.Type.NumIn() != 3 || method.Type.NumOut() != 2 {
 			continue
 		}
@@ -288,8 +284,7 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 
 			parameters := f.generateParameters(reqType)
 			responses := f.generateResponses(respType)
-			log.Printf("Generated responses for method %s: %+v", method.Name, responses)
-
+			f.debugOutput("Generated responses for method %s: %+v\n", method.Name, responses)
 			apiDef := APIDefinition{
 				HandlerName:  handlerName,
 				RequestType:  reqType,
@@ -305,12 +300,9 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 			}
 
 			f.definitions[handlerName] = apiDef
-			log.Printf("Added API definition for handler: %s", handlerName)
+			f.debugOutput("Added API definition for handler: %s", handlerName)
 			f.updateSwaggerSpec(apiDef)
-
-			if f.debug {
-				fmt.Printf("Discovered API: %s %s - %s\n", apiDef.Meta.Method, fullPath, apiDef.Meta.Summary)
-			}
+			f.debugOutput("Discovered API: %s %s - %s\n", apiDef.Meta.Method, fullPath, apiDef.Meta.Summary)
 		}
 	}
 
@@ -318,8 +310,7 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 }
 
 func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
-	log.Printf("Updating Swagger spec for path: %s", apiDef.Meta.Path)
-
+	f.debugOutput("Updating Swagger spec for path: %s\n", apiDef.Meta.Path)
 	// 确保 Paths 已初始化
 	if f.swaggerSpec.Paths == nil {
 		f.swaggerSpec.Paths = &spec.Paths{
@@ -343,8 +334,7 @@ func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
 		},
 	}
 
-	log.Printf("Created operation for path %s: %+v", apiDef.Meta.Path, operation)
-
+	f.debugOutput("Created operation for path %s: %+v\n", apiDef.Meta.Path, operation)
 	switch strings.ToUpper(apiDef.Meta.Method) {
 	case "GET":
 		path.Get = operation
@@ -358,19 +348,19 @@ func (f *APIFramework) updateSwaggerSpec(apiDef APIDefinition) {
 
 	f.swaggerSpec.Paths.Paths[apiDef.Meta.Path] = path
 
-	// 确保 Definitions 已初始化
-	if f.swaggerSpec.Definitions == nil {
-		f.swaggerSpec.Definitions = make(map[string]spec.Schema)
-	}
+	//// 确保 Definitions 已初始化
+	//if f.swaggerSpec.Definitions == nil {
+	//	f.swaggerSpec.Definitions = make(map[string]spec.Schema)
+	//}
+	//
+	//// 添加响应模型到 Definitions
+	//if apiDef.Responses != nil && apiDef.Responses.StatusCodeResponses[200].Schema != nil {
+	//	modelName := apiDef.HandlerName + "Response"
+	//	f.swaggerSpec.Definitions[modelName] = *apiDef.Responses.StatusCodeResponses[200].Schema
+	//	log.Printf("Added response model to Definitions: %s", modelName)
+	//}
 
-	// 添加响应模型到 Definitions
-	if apiDef.Responses != nil && apiDef.Responses.StatusCodeResponses[200].Schema != nil {
-		modelName := apiDef.HandlerName + "Response"
-		f.swaggerSpec.Definitions[modelName] = *apiDef.Responses.StatusCodeResponses[200].Schema
-		log.Printf("Added response model to Definitions: %s", modelName)
-	}
-
-	log.Printf("Updated Swagger spec for path: %s", apiDef.Meta.Path)
+	f.debugOutput("Updated Swagger spec for path: %s\n", apiDef.Meta.Path)
 }
 
 // extractMeta 从字段标签中提取元数据
@@ -393,9 +383,7 @@ func (f *APIFramework) injectDependencies(controller interface{}) {
 		field := controllerType.Field(i)
 		if field.Type == reflect.TypeOf(f) && isExported(field.Name) {
 			controllerValue.Field(i).Set(reflect.ValueOf(f))
-			if f.debug {
-				fmt.Printf("Injected framework instance into %s\n", controllerType.Name())
-			}
+			f.debugOutput("Injected framework instance into %s\n", controllerType.Name())
 		} else if service, err := f.GetWeaverService(field.Name); err == nil {
 			controllerValue.Set(reflect.ValueOf(service))
 		}
@@ -437,7 +425,7 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 			}
 		case http.MethodPost, http.MethodPut, http.MethodPatch:
 			if err := f.decodeJSONRequest(r, req); err != nil {
-				log.Printf("Error decoding JSON request: %v", err)
+				f.debugOutput("Error decoding JSON request: %v\n", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -502,9 +490,7 @@ func (f *APIFramework) decodeJSONRequest(r *http.Request, dst interface{}) error
 	}
 	defer r.Body.Close()
 
-	if f.debug {
-		log.Printf("Raw JSON data:\n%s", string(body))
-	}
+	f.debugOutput("Decoding JSON request for %T\n", dst)
 
 	// 创建一个临时结构来存储JSON数据
 	var tempData map[string]interface{}
@@ -682,9 +668,7 @@ func getFieldName(field reflect.StructField) (string, bool) {
 // GetServer 返回http.Handler接口，用于启动服务
 func (f *APIFramework) GetServer() http.Handler {
 	f.initOnce.Do(func() {
-		if f.debug {
-			log.Println("Initializing framework in GetServer")
-		}
+		f.debugOutput("Initializing framework in GetServer\n")
 		f.Init()
 	})
 	return f.router
@@ -807,5 +791,11 @@ func (f *APIFramework) PrintAPIRoutes() {
 	for _, route := range routes {
 		fmt.Println(route)
 		fmt.Println("----------------------------------------------------------------------------")
+	}
+}
+
+func (f *APIFramework) debugOutput(format string, v ...any) {
+	if f.debug {
+		fmt.Printf(format, v...)
 	}
 }
