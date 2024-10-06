@@ -38,7 +38,6 @@ func (f *APIFramework) Init() {
 
 		handler := f.createHandler(def)
 		f.router.HandleFunc(def.Meta.Path, handler).Methods(def.Meta.Method)
-		f.addSwaggerPath(def)
 
 		if f.debug {
 			log.Printf("Registered route: %s %s", def.Meta.Method, def.Meta.Path)
