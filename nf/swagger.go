@@ -273,7 +273,6 @@ func getPropertyName(field reflect.StructField) string {
 }
 
 // addSwaggerPath 添加路径到 Swagger 规范
-
 func (f *APIFramework) addSwaggerPath(def APIDefinition) {
 	path := f.swaggerSpec.Paths.Paths[def.Meta.Path]
 	operation := &spec.Operation{
@@ -301,7 +300,6 @@ func (f *APIFramework) addSwaggerPath(def APIDefinition) {
 }
 
 // getSwaggerParams 从请求类型生成 Swagger 参数
-
 func (f *APIFramework) getSwaggerParams(reqType reflect.Type) []spec.Parameter {
 	var params []spec.Parameter
 	for i := 0; i < reqType.Elem().NumField(); i++ {
@@ -326,7 +324,6 @@ func (f *APIFramework) getSwaggerParams(reqType reflect.Type) []spec.Parameter {
 }
 
 // getSwaggerResponses 从响应类型生成 Swagger 响应
-
 func (f *APIFramework) getSwaggerResponses(respType reflect.Type) *spec.Responses {
 	return &spec.Responses{
 		ResponsesProps: spec.ResponsesProps{
