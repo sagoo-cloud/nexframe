@@ -10,6 +10,7 @@ type TokenConfig struct {
 	ExpiresTime        time.Duration `json:"expiresTime"`        // 过期时间
 	Issuer             string        `json:"issuer"`             // 签发者
 	RefreshExpiresTime time.Duration `json:"refreshExpiresTime"` // 刷新令牌过期时间
+	ExcludePaths       []string      `json:"excludePaths"`       // 不需要验证的路径
 }
 
 func LoadTokenConfig() *TokenConfig {
@@ -21,6 +22,7 @@ func LoadTokenConfig() *TokenConfig {
 		ExpiresTime:        EnvDuration(TokenExpiresTime, "24h"),
 		Issuer:             EnvString(TokenIssuer, "sagoo"),
 		RefreshExpiresTime: EnvDuration(TokenRefreshExpiresTime, "48h"),
+		ExcludePaths:       EnvStringSlice(TokenExcludePaths),
 	}
 	return config
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"net/http"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -90,6 +91,9 @@ func NewJwt() (*jwtMiddleware, error) {
 		return nil, ErrNilConfig
 	}
 
+	// 添加默认排除路径
+	cfg.ExcludePaths = append(cfg.ExcludePaths, "/swagger/index.html", "/swagger/*")
+
 	signingKey, err := parseSigningKey(cfg.SigningKey)
 	if err != nil {
 		return nil, err
@@ -131,6 +135,12 @@ func parseSigningKey(key interface{}) ([]byte, error) {
 // Middleware 返回用于验证JWT令牌的http.Handler
 func (jm *jwtMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 检查当前路径是否在排除列表中
+		if jm.isExcludedPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		token, err := jm.extractToken(r)
 		if err != nil {
 			jm.conf.ErrHandler(w, r, err)
@@ -295,6 +305,24 @@ func (jm *jwtMiddleware) RefreshToken(refreshToken string) (*TokenPair, error) {
 	}
 
 	return jm.GenerateTokenPair(tokenClaims.Username)
+}
+
+// isExcludedPath 检查路径是否在排除列表中
+func (jm *jwtMiddleware) isExcludedPath(reqPath string) bool {
+	for _, excludePath := range jm.conf.ExcludePaths {
+		// 处理通配符情况
+		if strings.HasSuffix(excludePath, "*") {
+			// 移除末尾的 "*" 并检查请求路径是否以此为前缀
+			prefix := strings.TrimSuffix(excludePath, "*")
+			if strings.HasPrefix(reqPath, prefix) {
+				return true
+			}
+		} else if matched, _ := path.Match(excludePath, reqPath); matched {
+			// 使用 path.Match 处理简单的模式匹配
+			return true
+		}
+	}
+	return false
 }
 
 // NewAuthContext 将认证声明添加到上下文中

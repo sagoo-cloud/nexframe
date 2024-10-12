@@ -48,6 +48,7 @@ const (
 	TokenExpiresTime        = "token.expiresTime"        // 过期时间
 	TokenIssuer             = "token.issuer"             // 签发者
 	TokenRefreshExpiresTime = "token.refreshExpiresTime" // 刷新令牌过期时间
+	TokenExcludePaths       = "token.excludePaths"       // 不需要验证的路径
 )
 
 // redis配置

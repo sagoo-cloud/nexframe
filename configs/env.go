@@ -89,7 +89,7 @@ func EnvBool(key string, value ...interface{}) bool {
 	return ret
 }
 func EnvStringSlice(key string, value ...interface{}) []string {
-	if cfg == nil {
+	if cfg == nil || value == nil {
 		return []string{}
 	}
 	mode := args.Mode
