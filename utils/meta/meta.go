@@ -16,6 +16,7 @@ type Meta struct {
 	Path          string
 	Method        string
 	Summary       string
+	Description   string
 	Tags          string
 	ExtraMetadata map[string]string
 }

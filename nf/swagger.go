@@ -278,7 +278,7 @@ func (f *APIFramework) addSwaggerPath(def APIDefinition) {
 	operation := &spec.Operation{
 		OperationProps: spec.OperationProps{
 			Summary:     def.Meta.Summary,
-			Description: def.Meta.Summary,
+			Description: def.Meta.Description,
 			Tags:        strings.Split(def.Meta.Tags, ","),
 			Parameters:  f.getSwaggerParams(def.RequestType),
 			Responses:   f.getSwaggerResponses(def.ResponseType),

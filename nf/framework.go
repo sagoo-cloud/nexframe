@@ -274,10 +274,11 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 				RequestType:  reqType,
 				ResponseType: respType,
 				Meta: meta.Meta{
-					Path:    fullPath,
-					Method:  metaData["method"],
-					Summary: metaData["summary"],
-					Tags:    metaData["tags"],
+					Path:        fullPath,
+					Method:      metaData["method"],
+					Summary:     metaData["summary"],
+					Description: metaData["description"],
+					Tags:        metaData["tags"],
 				},
 				Parameters: parameters,
 				Responses:  responses,
@@ -296,7 +297,7 @@ func (f *APIFramework) discoverAPIs(controllerName string, controller interface{
 // extractMeta 从字段标签中提取元数据
 func extractMeta(tag reflect.StructTag) map[string]string {
 	metaData := make(map[string]string)
-	for _, key := range []string{"path", "method", "summary", "tags"} {
+	for _, key := range []string{"path", "method", "summary", "description", "tags"} {
 		if value := tag.Get(key); value != "" {
 			metaData[key] = value
 		}
@@ -750,7 +751,8 @@ func (f *APIFramework) generateSwaggerJSON() *spec.Swagger {
 		operation := &spec.Operation{
 			OperationProps: spec.OperationProps{
 				Summary:     def.Meta.Summary,
-				Description: def.Meta.Summary,
+				Description: def.Meta.Description,
+				Tags:        strings.Split(def.Meta.Tags, ","),
 				Parameters:  def.Parameters,
 				Responses:   def.Responses,
 			},
