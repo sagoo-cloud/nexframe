@@ -67,86 +67,6 @@ func (f *APIFramework) fillMap(data map[string]interface{}, v reflect.Value) err
 	return nil
 }
 
-func setIntField(field reflect.Value, v reflect.Value) error {
-	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		field.SetInt(v.Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		field.SetInt(int64(v.Uint()))
-	case reflect.Float32, reflect.Float64:
-		field.SetInt(int64(v.Float()))
-	case reflect.String:
-		intValue, err := strconv.ParseInt(v.String(), 10, 64)
-		if err != nil {
-			return err
-		}
-		field.SetInt(intValue)
-	default:
-		return fmt.Errorf("cannot set int field from type %s", v.Type())
-	}
-	return nil
-}
-
-func setUintField(field reflect.Value, v reflect.Value) error {
-	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		field.SetUint(uint64(v.Int()))
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		field.SetUint(v.Uint())
-	case reflect.Float32, reflect.Float64:
-		field.SetUint(uint64(v.Float()))
-	case reflect.String:
-		uintValue, err := strconv.ParseUint(v.String(), 10, 64)
-		if err != nil {
-			return err
-		}
-		field.SetUint(uintValue)
-	default:
-		return fmt.Errorf("cannot set uint field from type %s", v.Type())
-	}
-	return nil
-}
-
-func setFloatField(field reflect.Value, v reflect.Value) error {
-	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		field.SetFloat(float64(v.Int()))
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		field.SetFloat(float64(v.Uint()))
-	case reflect.Float32, reflect.Float64:
-		field.SetFloat(v.Float())
-	case reflect.String:
-		floatValue, err := strconv.ParseFloat(v.String(), 64)
-		if err != nil {
-			return err
-		}
-		field.SetFloat(floatValue)
-	default:
-		return fmt.Errorf("cannot set float field from type %s", v.Type())
-	}
-	return nil
-}
-
-func setBoolField(field reflect.Value, v reflect.Value) error {
-	switch v.Kind() {
-	case reflect.Bool:
-		field.SetBool(v.Bool())
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		field.SetBool(v.Int() != 0)
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		field.SetBool(v.Uint() != 0)
-	case reflect.String:
-		boolValue, err := strconv.ParseBool(v.String())
-		if err != nil {
-			return err
-		}
-		field.SetBool(boolValue)
-	default:
-		return fmt.Errorf("cannot set bool field from type %s", v.Type())
-	}
-	return nil
-}
-
 // 可以保持不变或根据需要进行类似的调整
 func setField(field reflect.Value, value interface{}) error {
 	switch field.Kind() {
@@ -196,24 +116,6 @@ func setField(field reflect.Value, value interface{}) error {
 		field.Set(reflect.ValueOf(value))
 	default:
 		return fmt.Errorf("unsupported field type %s", field.Type())
-	}
-	return nil
-}
-
-func setTimeField(field reflect.Value, value interface{}) error {
-	switch v := value.(type) {
-	case string:
-		t, err := time.Parse(time.RFC3339, v)
-		if err != nil {
-			return fmt.Errorf("error parsing time string: %v", err)
-		}
-		field.Set(reflect.ValueOf(t))
-	case float64:
-		field.Set(reflect.ValueOf(time.Unix(int64(v), 0)))
-	case int64:
-		field.Set(reflect.ValueOf(time.Unix(v, 0)))
-	default:
-		return fmt.Errorf("unsupported type for time field: %T", value)
 	}
 	return nil
 }
@@ -281,39 +183,4 @@ func setAnonymousField(field reflect.Value, data map[string]interface{}) error {
 		return setStructField(field, data)
 	}
 	return nil
-}
-
-func setSliceField(field reflect.Value, value interface{}) error {
-	slice, ok := value.([]interface{})
-	if !ok {
-		return fmt.Errorf("expected slice, got %T", value)
-	}
-	sliceValue := reflect.MakeSlice(field.Type(), len(slice), len(slice))
-	for i, item := range slice {
-		if err := setField(sliceValue.Index(i), item); err != nil {
-			return err
-		}
-	}
-	field.Set(sliceValue)
-	return nil
-}
-
-func setMapField(field reflect.Value, v reflect.Value) error {
-	if v.Kind() != reflect.Map {
-		return fmt.Errorf("expected map, got %v", v.Kind())
-	}
-
-	mapValue := reflect.MakeMap(field.Type())
-	for _, key := range v.MapKeys() {
-		mapValue.SetMapIndex(key, v.MapIndex(key))
-	}
-	field.Set(mapValue)
-	return nil
-}
-
-func setPtrField(field reflect.Value, value interface{}) error {
-	if field.IsNil() {
-		field.Set(reflect.New(field.Type().Elem()))
-	}
-	return setField(field.Elem(), value)
 }

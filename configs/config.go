@@ -1,8 +1,10 @@
 package configs
 
 import (
+	"fmt"
 	"github.com/sagoo-cloud/nexframe/os/command/args"
 	"github.com/spf13/viper"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -53,8 +55,19 @@ func loadFromToml(fileName ...string) *config {
 	c.AddConfigPath("../../")
 	c.AddConfigPath("./config/")
 	c.AddConfigPath("../config/")
+	c.AddConfigPath("../../config/")
+	c.AddConfigPath("../../../config/")
 	c.SetConfigType("toml")
-	c.ReadInConfig()
+	err := c.ReadInConfig()
+	if err != nil {
+		fmt.Println("config file error: ", err)
+		// 配置文件不存在，创建一个空的配置文件
+		err := c.WriteConfigAs("config.toml")
+		if err != nil {
+			log.Fatalf("Error writing config file: %v", err)
+		}
+		return c
+	}
 	return c
 }
 func (c *ConfigEntity) GetConfig() *viper.Viper {

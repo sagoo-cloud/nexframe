@@ -1,12 +1,14 @@
 package nf
 
 import (
-	"fmt"
 	"github.com/sagoo-cloud/nexframe/nf/swagger"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 // Init 初始化框架，设置路由和处理函数
@@ -26,20 +28,16 @@ func (f *APIFramework) Init() {
 	if f.config.StatsVizEnabled {
 		f.EnableStatsviz()
 	}
+
 	// 遍历定义并设置路由
 	for _, def := range f.definitions {
-		// 创建一个测试实例并尝试初始化 Meta
 		testReq := reflect.New(def.RequestType.Elem()).Interface()
 		if err := meta.InitMeta(testReq); err != nil {
 			log.Printf("Warning: Failed to initialize Meta for %T: %v", testReq, err)
-			// 这里可以选择继续初始化，或者在遇到错误时中断
-			// 如果选择中断，可以使用 return 语句
-			// return
 		}
 
 		handler := f.createHandler(def)
 		f.router.HandleFunc(def.Meta.Path, handler).Methods(def.Meta.Method)
-		f.addSwaggerPath(def)
 
 		if f.debug {
 			log.Printf("Registered route: %s %s", def.Meta.Method, def.Meta.Path)
@@ -51,11 +49,9 @@ func (f *APIFramework) Init() {
 		log.Printf("Applying %d middlewares\n", len(f.middlewares))
 	}
 
-	// 添加错误处理中间件
 	f.UseErrorHandlingMiddleware()
-
-	// 应用上下文中间件
 	f.router.Use(f.createContextMiddleware())
+	f.router.Use(f.domainCheckMiddleware)
 
 	for i, mw := range f.middlewares {
 		if f.debug {
@@ -64,41 +60,55 @@ func (f *APIFramework) Init() {
 		f.router.Use(mw)
 	}
 
-	if f.debug {
-		// 添加一个测试路由来验证中间件
-		f.router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintln(w, "Test route")
-		})
-		log.Println("Added test route: /test")
+	// Swagger 相关设置
+	swaggerPath := "/swagger/"
+	if f.config.SwaggerPath != "" {
+		swaggerPath = f.config.SwaggerPath
 	}
-
-	// 添加 Swagger UI 路由
 	if f.config.OpenApiPath != "" {
 		f.router.HandleFunc(f.config.OpenApiPath, f.serveSwaggerSpec)
 	} else {
-		f.router.HandleFunc("/swagger/doc.json", f.serveSwaggerSpec)
+		f.router.HandleFunc(swaggerPath+"doc.json", f.serveSwaggerSpec)
 	}
 
-	// 进行swagger文档初始化
 	swaggerHandler := swagger.Handler(
 		swagger.TemplateContent(f.config.SwaggerUITemplate),
 	)
-
-	if f.config.SwaggerPath != "" {
-		f.router.PathPrefix(f.config.SwaggerPath).Handler(swaggerHandler)
-	} else {
-		f.router.PathPrefix("/swagger/").Handler(swaggerHandler)
-	}
-
-	// 设置静态资源路由
-	if f.wwwRoot != "" && f.fileSystem != nil {
-		f.router.PathPrefix("/assets/").Handler(f.NewStaticHandler(f.fileSystem, "assets"))
-	}
+	f.router.PathPrefix(swaggerPath).Handler(swaggerHandler)
 
 	// 设置静态文件服务
-	if f.config.FileServerEnabled {
-		for _, staticPath := range f.config.StaticPaths {
-			f.router.PathPrefix(staticPath.Prefix).Handler(http.StripPrefix(staticPath.Prefix, http.FileServer(http.Dir(staticPath.Path))))
+	if f.config.FileServerEnabled && f.wwwRoot != "" {
+		fileServer := f.NewStaticHandler(http.Dir(f.wwwRoot), "")
+		f.router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 如果路径以 swaggerPath 开头，不处理
+			if strings.HasPrefix(r.URL.Path, swaggerPath) {
+				http.NotFound(w, r)
+				return
+			}
+
+			path := filepath.Join(f.wwwRoot, r.URL.Path)
+			_, err := os.Stat(path)
+
+			if os.IsNotExist(err) {
+				if r.URL.Path != "/" {
+					http.NotFound(w, r)
+					return
+				}
+				path = filepath.Join(f.wwwRoot, "index.html")
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					http.NotFound(w, r)
+					return
+				}
+			} else if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			fileServer.ServeHTTP(w, r)
+		})
+
+		if f.debug {
+			log.Printf("Static file server enabled for root: %s", f.wwwRoot)
 		}
 	}
 

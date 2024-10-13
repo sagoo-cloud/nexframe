@@ -1,5 +1,3 @@
-// auth/jwt.go
-
 package auth
 
 import (
@@ -8,258 +6,360 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"net/http"
+	"path"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/sagoo-cloud/nexframe/configs"
 )
+
+// JWTMiddleware 接口定义
+type JWTMiddleware interface {
+	Middleware(next http.Handler) http.Handler
+	GenerateTokenPair(username string) (*TokenPair, error)
+	RefreshToken(refreshToken string) (*TokenPair, error)
+}
+
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
+
+// 自定义错误
+var (
+	ErrMissingJwtToken        = errors.New("缺少JWT令牌")
+	ErrTokenInvalid           = errors.New("令牌无效")
+	ErrTokenExpired           = errors.New("JWT令牌已过期")
+	ErrTokenParseFail         = errors.New("解析JWT令牌失败")
+	ErrUnSupportSigningMethod = errors.New("不支持的签名方法")
+	ErrInvalidTokenType       = errors.New("非访问令牌")
+	ErrNilConfig              = errors.New("配置为空")
+)
+
+// TokenClaims 的对象池
+var tokenClaimsPool = sync.Pool{
+	New: func() interface{} {
+		return &TokenClaims{}
+	},
+}
+
+// TokenPair 存储访问令牌和刷新令牌
+type TokenPair struct {
+	AccessToken  string
+	RefreshToken string
+}
 
 type authKey struct{}
 
-const (
-	bearerWord       string = "Bearer"
-	bearerFormat     string = "Bearer %s"
-	authorizationKey string = "Authorization"
-)
+// AuthClaims 定义认证声明的接口
+type AuthClaims interface {
+	jwt.Claims
+	GetUsername() string
+}
 
-var (
-	ErrMissingJwtToken        = errors.New("JWT token is missing")
-	ErrMissingKeyFunc         = errors.New("keyFunc is missing")
-	ErrTokenInvalid           = errors.New("Token is invalid")
-	ErrTokenExpired           = errors.New("JWT token has expired")
-	ErrTokenParseFail         = errors.New("Fail to parse JWT token ")
-	ErrUnSupportSigningMethod = errors.New("Wrong signing method")
-	ErrWrongContext           = errors.New("Wrong context for middleware")
-	ErrNeedTokenProvider      = errors.New("Token provider is missing")
-	ErrSignToken              = errors.New("Can not sign token.Is the key correct?")
-	ErrGetKey                 = errors.New("Can not get key while signing token")
-)
+// TokenClaims 实现 AuthClaims 接口
+type TokenClaims struct {
+  ID       string `json:"id"`
+	Username  string `json:"username"`
+	TokenType string `json:"token_type"` // "access" 或 "refresh"
+	jwt.RegisteredClaims
+}
 
-var (
-	issuer                    = "qmPlus"
-	bufferTime  time.Duration = -time.Second
-	expiresTime time.Duration = 7 * 24 * time.Hour
-)
+// GetUsername 返回用户名
+func (tc *TokenClaims) GetUsername() string {
+	return tc.Username
+}
 
-// JwtConfig 定义了 JWT 中间件的配置
+// JwtConfig 定义JWT中间件的配置
 type JwtConfig struct {
-	SigningKey    interface{} // 用于签名的密钥
-	TokenLookup   string      // 定义如何查找令牌
-	SigningMethod string      // 签名方法
-	BufferTime    string      // 生效时间
-	ExpiresTime   string      // 过期时间
-	Issuer        string      // 签发者
+	configs.TokenConfig
+	SigningMethod jwt.SigningMethod
 	ErrHandler    func(w http.ResponseWriter, r *http.Request, err error)
 }
 
-// jwtMiddleware 是验证 JWT 令牌的中间件
+// jwtMiddleware 实现JWT令牌验证的中间件
 type jwtMiddleware struct {
-	opt  options
-	conf JwtConfig
+	conf         JwtConfig
+	keyFunc      jwt.Keyfunc
+	extractToken func(*http.Request) (string, error)
 }
 
-// New 创建一个新的 jwtMiddleware 实例
-func New(config JwtConfig) (*jwtMiddleware, error) {
-	o := options{signingMethod: jwt.SigningMethodHS256}
-	if config.SigningKey == nil {
-		return nil, errors.New("jwt 中间件需要签名密钥")
-	} else {
-		o.keyFunc = func(token *jwt.Token) (interface{}, error) {
-			return config.SigningKey, nil
-		}
+// NewJwt 创建新的jwtMiddleware实例
+func NewJwt() (*jwtMiddleware, error) {
+	cfg := configs.LoadTokenConfig()
+	if cfg == nil {
+		return nil, ErrNilConfig
 	}
-	if config.SigningMethod == "" {
-		config.SigningMethod = "HS256"
+
+	// 添加默认排除路径
+	cfg.ExcludePaths = append(cfg.ExcludePaths, "/swagger/index.html", "/swagger/*")
+
+	signingKey, err := parseSigningKey(cfg.SigningKey)
+	if err != nil {
+		return nil, err
 	}
-	if config.TokenLookup == "" {
-		config.TokenLookup = "header:Authorization"
+
+	config := JwtConfig{
+		TokenConfig:   *cfg,
+		SigningMethod: GetSigningMethod(cfg.Method),
+		ErrHandler:    defaultErrorHandler,
 	}
-	if config.ErrHandler == nil {
-		config.ErrHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-		}
-	}
-	var err error
-	if config.Issuer != "" {
-		issuer = config.Issuer
-	}
-	if config.BufferTime != "" {
-		bufferTime, err = time.ParseDuration(config.BufferTime)
-		if err != nil {
-			return nil, fmt.Errorf("Error parsing bufferTime: %v", err)
-		}
-	}
-	if config.ExpiresTime != "" {
-		expiresTime, err = time.ParseDuration(config.ExpiresTime)
-		if err != nil {
-			return nil, fmt.Errorf("Error parsing expiresTime: %v", err)
-		}
-	}
-	return &jwtMiddleware{
+	config.SigningKey = signingKey
+
+	jm := &jwtMiddleware{
 		conf: config,
-		opt:  o,
-	}, nil
+		keyFunc: func(token *jwt.Token) (interface{}, error) {
+			return signingKey, nil
+		},
+	}
+
+	if err := jm.initializeTokenExtractor(); err != nil {
+		return nil, err
+	}
+
+	return jm, nil
 }
 
-// Middleware 返回一个可以与 gorilla/mux 的 Use() 方法一起使用的 http.Handler
+// parseSigningKey 解析签名密钥
+func parseSigningKey(key interface{}) ([]byte, error) {
+	switch k := key.(type) {
+	case []byte:
+		return k, nil
+	case string:
+		return []byte(k), nil
+	default:
+		return nil, errors.New("无效的签名密钥类型")
+	}
+}
+
+// Middleware 返回用于验证JWT令牌的http.Handler
 func (jm *jwtMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 检查当前路径是否在排除列表中
+		if jm.isExcludedPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		token, err := jm.extractToken(r)
 		if err != nil {
 			jm.conf.ErrHandler(w, r, err)
 			return
 		}
 
-		claims, err := ParseJwtToken(token, WithSigningMethod(jm.opt.signingMethod), WithKeyFunc(jm.opt.keyFunc))
+		claims, err := jm.parseJwtToken(token)
 		if err != nil {
 			jm.conf.ErrHandler(w, r, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(NewContext(r.Context(), claims)))
+
+		ctx := NewAuthContext(r.Context(), claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// extractToken 从请求中提取令牌
-func (jm *jwtMiddleware) extractToken(r *http.Request) (string, error) {
-	parts := strings.Split(jm.conf.TokenLookup, ":")
-	switch parts[0] {
-	case "header":
-		return extractTokenFromHeader(r, parts[1])
-	case "query":
-		return extractTokenFromQuery(r, parts[1])
-	case "cookie":
-		return extractTokenFromCookie(r, parts[1])
+// initializeTokenExtractor 初始化令牌提取器
+func (jm *jwtMiddleware) initializeTokenExtractor() error {
+	extractors := map[string]func(*http.Request, string) (string, error){
+		"header": extractTokenFromHeader, // 从请求头提取令牌
+		"query":  extractTokenFromQuery,  // 从查询参数提取令牌
+		"cookie": extractTokenFromCookie, // 从cookie提取令牌
 	}
-	return "", errors.New("无效的令牌查找配置")
+
+	parts := strings.SplitN(jm.conf.TokenLookup, ":", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("无效的令牌查找配置: %s", jm.conf.TokenLookup)
+	}
+
+	extractor, ok := extractors[parts[0]]
+	if !ok {
+		return fmt.Errorf("不支持的令牌查找方法: %s", parts[0])
+	}
+
+	jm.extractToken = func(r *http.Request) (string, error) {
+		return extractor(r, parts[1])
+	}
+
+	return nil
 }
 
-// extractTokenFromHeader 从请求头中提取令牌
+// extractTokenFromHeader 从请求头提取令牌
 func extractTokenFromHeader(r *http.Request, header string) (string, error) {
 	authHeader := r.Header.Get(header)
 	if authHeader == "" {
-		return "", errors.New("缺少认证头")
+		return "", ErrMissingJwtToken
 	}
-	parts := strings.Split(authHeader, " ")
+	parts := strings.SplitN(authHeader, " ", 2)
 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		return "", errors.New("无效的认证头")
+		return "", ErrTokenInvalid
 	}
 	return parts[1], nil
 }
 
-// extractTokenFromQuery 从查询参数中提取令牌
+// extractTokenFromQuery 从查询参数提取令牌
 func extractTokenFromQuery(r *http.Request, param string) (string, error) {
 	token := r.URL.Query().Get(param)
 	if token == "" {
-		return "", errors.New("查询参数中缺少令牌")
+		return "", ErrMissingJwtToken
 	}
 	return token, nil
 }
 
-// extractTokenFromCookie 从 cookie 中提取令牌
+// extractTokenFromCookie 从cookie提取令牌
 func extractTokenFromCookie(r *http.Request, name string) (string, error) {
 	cookie, err := r.Cookie(name)
 	if err != nil {
-		return "", errors.New("cookie 中缺少令牌")
+		return "", ErrMissingJwtToken
 	}
 	return cookie.Value, nil
 }
 
-// Parser is a jwt parser
-type options struct {
-	signingMethod jwt.SigningMethod
-	claims        func() jwt.Claims
-	keyFunc       jwt.Keyfunc
-	tokenHeader   map[string]interface{}
-}
+// parseJwtToken 解析JWT令牌
+func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
+	claims := tokenClaimsPool.Get().(*TokenClaims)
+	defer tokenClaimsPool.Put(claims)
 
-type TokenClaims struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	// 在这里添加你想包含的其他声明
-	jwt.RegisteredClaims
-}
-
-// Option is jwt option.
-type Option func(*options)
-
-func WithSigningMethod(method jwt.SigningMethod) Option {
-	return func(o *options) {
-		o.signingMethod = method
-	}
-}
-func WithKeyFunc(f jwt.Keyfunc) Option {
-	return func(o *options) {
-		o.keyFunc = f
-	}
-}
-func WithClaims(f func() jwt.Claims) Option {
-	return func(o *options) {
-		o.claims = f
-	}
-}
-
-// NewContext put auth info into context
-func NewContext(ctx context.Context, info jwt.Claims) context.Context {
-	return context.WithValue(ctx, authKey{}, info)
-}
-
-// FromContext extract auth info from context
-func FromContext(ctx context.Context) (token jwt.Claims, ok bool) {
-	token, ok = ctx.Value(authKey{}).(jwt.Claims)
-	return
-}
-
-func GenerateToken(key string, opts ...Option) (string, error) {
-	o := &options{
-		claims: func() jwt.Claims {
-			return &TokenClaims{}
-		},
-		signingMethod: jwt.SigningMethodHS256,
-	}
-	for _, opt := range opts {
-		opt(o)
-	}
-
-	if claims, ok := o.claims().(*TokenClaims); ok {
-		if claims.Issuer == "" {
-			claims.Issuer = issuer
+	*claims = TokenClaims{} // 重置claims
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Method.Alg() != jm.conf.SigningMethod.Alg() {
+			return nil, ErrUnSupportSigningMethod
 		}
-		if claims.NotBefore == nil {
-			claims.NotBefore = jwt.NewNumericDate(time.Now().Add(bufferTime))
+		return jm.conf.SigningKey, nil
+	})
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrTokenExpired
 		}
-		if claims.ExpiresAt == nil {
-			claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(expiresTime))
-		}
-		return jwt.NewWithClaims(o.signingMethod, claims).SignedString([]byte(key))
+		return nil, fmt.Errorf("%w: %v", ErrTokenParseFail, err)
 	}
-	return jwt.NewWithClaims(o.signingMethod, o.claims()).SignedString([]byte(key))
+
+	if !token.Valid {
+		return nil, ErrTokenInvalid
+	}
+
+	returnClaims := &TokenClaims{
+		Username:         claims.Username,
+		TokenType:        claims.TokenType,
+		RegisteredClaims: claims.RegisteredClaims,
+	}
+
+	return returnClaims, nil
 }
 
-// ParseJwtToken 解析和验证令牌
-func ParseJwtToken(jwtToken string, opts ...Option) (jwt.Claims, error) {
-	var (
-		err       error
-		tokenInfo *jwt.Token
-		o         = &options{
-			claims: func() jwt.Claims {
-				return &TokenClaims{}
-			},
-			signingMethod: jwt.SigningMethodHS256,
-		}
-	)
-
-	for _, opt := range opts {
-		opt(o)
-	}
-	if o.claims != nil {
-		tokenInfo, err = jwt.ParseWithClaims(jwtToken, o.claims(), o.keyFunc)
-	} else {
-		tokenInfo, err = jwt.Parse(jwtToken, o.keyFunc)
-	}
+// GenerateTokenPair 生成新的JWT令牌对
+func (jm *jwtMiddleware) GenerateTokenPair(username string) (*TokenPair, error) {
+	accessToken, err := jm.createToken(username, TokenTypeAccess, jm.conf.ExpiresTime)
 	if err != nil {
 		return nil, err
-	} else if !tokenInfo.Valid {
-		return nil, ErrTokenInvalid
-	} else if tokenInfo.Method != o.signingMethod {
-		return nil, ErrUnSupportSigningMethod
 	}
-	return tokenInfo.Claims, nil
+
+	refreshToken, err := jm.createToken(username, TokenTypeRefresh, jm.conf.RefreshExpiresTime)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenPair{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+// createToken 创建单个令牌
+func (jm *jwtMiddleware) createToken(username, tokenType string, expiration time.Duration) (string, error) {
+	now := time.Now()
+	claims := &TokenClaims{
+		Username:  username,
+		TokenType: tokenType,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			Issuer:    jm.conf.Issuer,
+		},
+	}
+
+	token := jwt.NewWithClaims(jm.conf.SigningMethod, claims)
+	return token.SignedString(jm.conf.SigningKey)
+}
+
+// RefreshToken 刷新访问令牌
+func (jm *jwtMiddleware) RefreshToken(refreshToken string) (*TokenPair, error) {
+	claims, err := jm.parseJwtToken(refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenClaims, ok := claims.(*TokenClaims)
+	if !ok {
+		return nil, ErrTokenInvalid
+	}
+
+	if tokenClaims.TokenType != "refresh" {
+		return nil, ErrInvalidTokenType
+	}
+
+	if tokenClaims.ExpiresAt != nil && tokenClaims.ExpiresAt.Before(time.Now()) {
+		return nil, ErrTokenExpired
+	}
+
+	return jm.GenerateTokenPair(tokenClaims.Username)
+}
+
+// isExcludedPath 检查路径是否在排除列表中
+func (jm *jwtMiddleware) isExcludedPath(reqPath string) bool {
+	for _, excludePath := range jm.conf.ExcludePaths {
+		// 处理通配符情况
+		if strings.HasSuffix(excludePath, "*") {
+			// 移除末尾的 "*" 并检查请求路径是否以此为前缀
+			prefix := strings.TrimSuffix(excludePath, "*")
+			if strings.HasPrefix(reqPath, prefix) {
+				return true
+			}
+		} else if matched, _ := path.Match(excludePath, reqPath); matched {
+			// 使用 path.Match 处理简单的模式匹配
+			return true
+		}
+	}
+	return false
+}
+
+// NewAuthContext 将认证声明添加到上下文中
+func NewAuthContext(ctx context.Context, claims AuthClaims) context.Context {
+	return context.WithValue(ctx, authKey{}, claims)
+}
+
+// ClaimsFromContext 从上下文中获取认证声明
+func ClaimsFromContext(ctx context.Context) (AuthClaims, bool) {
+	claims, ok := ctx.Value(authKey{}).(AuthClaims)
+	return claims, ok
+}
+
+// GetCurrentUser 获取当前用户名
+func GetCurrentUser(ctx context.Context) (string, error) {
+	claims, ok := ClaimsFromContext(ctx)
+	if !ok {
+		return "", errors.New("未找到认证信息")
+	}
+	return claims.GetUsername(), nil
+}
+
+// defaultErrorHandler 默认错误处理函数
+func defaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	http.Error(w, err.Error(), http.StatusUnauthorized)
+}
+
+// GetSigningMethod 根据方法名返回JWT签名方法
+func GetSigningMethod(method string) jwt.SigningMethod {
+	switch method {
+	case "HS256":
+		return jwt.SigningMethodHS256
+	case "HS384":
+		return jwt.SigningMethodHS384
+	case "HS512":
+		return jwt.SigningMethodHS512
+	default:
+		return jwt.SigningMethodHS256
+	}
 }

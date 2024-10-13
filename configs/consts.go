@@ -41,8 +41,14 @@ const (
 
 // token配置
 const (
-	TokenKey = "token.key"
-	TokenExp = "token.exp"
+	TokenSigningKey         = "token.signingKey"         // 用于签名的密钥
+	TokenTokenLookup        = "token.tokenLookup"        // 定义如何查找令牌
+	TokenSigningMethod      = "token.signingMethod"      // 签名方法
+	TokenBufferTime         = "token.bufferTime"         // 生效时间
+	TokenExpiresTime        = "token.expiresTime"        // 过期时间
+	TokenIssuer             = "token.issuer"             // 签发者
+	TokenRefreshExpiresTime = "token.refreshExpiresTime" // 刷新令牌过期时间
+	TokenExcludePaths       = "token.excludePaths"       // 不需要验证的路径
 )
 
 // redis配置
