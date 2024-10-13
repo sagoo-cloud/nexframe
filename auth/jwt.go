@@ -171,6 +171,7 @@ type options struct {
 }
 
 type TokenClaims struct {
+	ID       string `json:"id"`
 	Username string `json:"username"`
 	// 在这里添加你想包含的其他声明
 	jwt.RegisteredClaims
