@@ -2,31 +2,22 @@ package idempotent
 
 import (
 	"context"
+	"errors"
 	"github.com/google/uuid"
-	"log"
+	"github.com/redis/go-redis/v9"
 	"strings"
 	"time"
 )
 
-// redis lua script(read => delete => get delete flag)
-const (
-	lua string = `
-local current = redis.call('GET', KEYS[1])
-if current == false then
-    return '-1';
-end
-local del = redis.call('DEL', KEYS[1])
-if del == 1 then
-     return '1';
-end
-return '0';
-`
-)
+// ErrRedisNotEnabled 定义Redis未启用错误
+var ErrRedisNotEnabled = errors.New("redis not enabled")
 
+// Idempotent 幂等性检查结构体
 type Idempotent struct {
 	ops Options
 }
 
+// New 创建新的Idempotent实例
 func New(options ...func(*Options)) *Idempotent {
 	ops := getOptionsOrSetDefault(nil)
 	for _, f := range options {
@@ -35,25 +26,55 @@ func New(options ...func(*Options)) *Idempotent {
 	return &Idempotent{ops: *ops}
 }
 
-func (i *Idempotent) Token(ctx context.Context) (token string) {
-	token = uuid.NewString()
-	if i.ops.redis != nil {
-		i.ops.redis.Set(ctx, strings.Join([]string{i.ops.prefix, token}, "_"), true, time.Duration(i.ops.expire)*time.Minute)
-	} else {
-		log.Println("please enable redis, otherwise the idempotent is invalid")
+// Token 生成幂等性token
+func (i *Idempotent) Token(ctx context.Context) (string, error) {
+	if i.ops.redis == nil {
+		return "", ErrRedisNotEnabled
 	}
-	return
+
+	token := uuid.NewString()
+	key := i.getKey(token)
+
+	err := i.ops.redis.Set(ctx, key, true, time.Duration(i.ops.expire)*time.Minute).Err()
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
-func (i *Idempotent) Check(ctx context.Context, token string) (pass bool) {
-	if i.ops.redis != nil {
-		res, err := i.ops.redis.Eval(ctx, lua, []string{strings.Join([]string{i.ops.prefix, token}, "_")}).Result()
-		if err != nil || res != "1" {
-			return
-		}
-	} else {
-		log.Println("please enable redis, otherwise the idempotent is invalid")
+// Check 检查幂等性token
+func (i *Idempotent) Check(ctx context.Context, token string) (bool, error) {
+	if i.ops.redis == nil {
+		return false, ErrRedisNotEnabled
 	}
-	pass = true
-	return
+
+	key := i.getKey(token)
+	res, err := i.ops.redis.Eval(ctx, luaScript, []string{key}).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return res == "1", nil
 }
+
+// getKey 生成Redis键
+func (i *Idempotent) getKey(token string) string {
+	return strings.Join([]string{i.ops.prefix, token}, "_")
+}
+
+// luaScript Redis Lua脚本：读取 => 删除 => 获取删除标志
+const luaScript = `
+local current = redis.call('GET', KEYS[1])
+if not current then
+    return '-1'
+end
+local del = redis.call('DEL', KEYS[1])
+if del == 1 then
+     return '1'
+end
+return '0'
+`
