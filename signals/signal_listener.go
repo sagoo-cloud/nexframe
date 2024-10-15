@@ -2,13 +2,12 @@ package signals
 
 import "context"
 
-// SignalListener is a type definition for a function that will act as a
-// listener for signals. This function takes two parameters:
-//  1. A context of type `context.Context`. This is typically used for timeout
-//     and cancellation signals, and can carry request-scoped values across API
-//     boundaries and between processes.
-//  2. A payload of generic type `T`. This can be any type, and represents the
-//     data or signal that the listener function will process.
+// SignalListener 是一个类型定义，用于定义作为信号监听器的函数。
+// 这个函数接受两个参数：
+//  1. 一个 `context.Context` 类型的上下文。这通常用于超时和取消信号，
+//     并且可以在 API 边界和进程之间携带请求作用域的值。
+//  2. 一个泛型类型 `T` 的有效载荷。这可以是任何类型，表示监听器函数
+//     将要处理的数据或信号。
 //
-// The function does not return any value.
+// 该函数不返回任何值。
 type SignalListener[T any] func(context.Context, T)

@@ -2,98 +2,93 @@ package signals
 
 import "context"
 
-// Signal is the interface that represents a signal that can be subscribed to
-// emitting a payload of type T.
+// Signal 是表示可以订阅的信号的接口，该信号发出 T 类型的有效载荷。
 type Signal[T any] interface {
-	// Emit notifies all subscribers of the signal and passes the context and the payload.
+	// Emit 通知信号的所有订阅者，并传递上下文和有效载荷。
 	//
-	// If the context has a deadline or cancellable property, the listeners
-	// must respect it. If the signal is async (default), the listeners are called
-	// in a separate goroutine.
+	// 如果上下文有截止日期或可取消属性，监听器必须遵守它。
+	// 如果信号是异步的（默认），监听器将在单独的 goroutine 中被调用。
 	//
-	// Example:
-	//	signal := signals.New[int]()
-	//	signal.AddListener(func(ctx context.Context, payload int) {
-	//		// Listener implementation
-	//		// ...
-	//	})
-	//	signal.Emit(context.Background(), 42)
+	// 示例：
+	// signal := signals.New[int]()
+	// signal.AddListener(func(ctx context.Context, payload int) {
+	//    // 监听器实现
+	//    // ...
+	// })
+	// signal.Emit(context.Background(), 42)
 	Emit(ctx context.Context, payload T) error
 
-	// AddListener adds a listener to the signal.
+	// AddListener 向信号添加一个监听器。
 	//
-	// The listener will be called whenever the signal is emitted. It returns the
-	// number of subscribers after the listener was added. It accepts an optional key
-	// that can be used to remove the listener later or to check if the listener
-	// was already added. It returns -1 if the listener with the same key
-	// was already added to the signal.
+	// 每当信号被发出时，监听器将被调用。它返回添加监听器后的订阅者数量。
+	// 它接受一个可选的键，可用于稍后删除监听器或检查监听器是否已添加。
+	// 如果具有相同键的监听器已添加到信号中，则返回 -1。
 	//
-	// Example:
-	//	signal := signals.NewSync[int]()
-	//	count := signal.AddListener(func(ctx context.Context, payload int) {
-	//		// Listener implementation
-	//		// ...
-	//	})
-	//	fmt.Println("Number of subscribers after adding listener:", count)
+	// 示例：
+	// signal := signals.NewSync[int]()
+	// count := signal.AddListener(func(ctx context.Context, payload int) {
+	//    // 监听器实现
+	//    // ...
+	// })
+	// fmt.Println("添加监听器后的订阅者数量：", count)
 	AddListener(handler SignalListener[T], key ...string) int
 
-	// RemoveListener removes a listener from the signal.
+	// RemoveListener 从信号中移除监听器。
 	//
-	// It returns the number of subscribers after the listener was removed.
-	// It returns -1 if the listener was not found.
+	// 它返回移除监听器后的订阅者数量。
+	// 如果未找到监听器，则返回 -1。
 	//
-	// Example:
-	//	signal := signals.NewSync[int]()
-	//	signal.AddListener(func(ctx context.Context, payload int) {
-	//		// Listener implementation
-	//		// ...
-	//	}, "key1")
-	//	count := signal.RemoveListener("key1")
-	//	fmt.Println("Number of subscribers after removing listener:", count)
+	// 示例：
+	// signal := signals.NewSync[int]()
+	// signal.AddListener(func(ctx context.Context, payload int) {
+	//    // 监听器实现
+	//    // ...
+	// }, "key1")
+	// count := signal.RemoveListener("key1")
+	// fmt.Println("移除监听器后的订阅者数量：", count)
 	RemoveListener(key string) int
 
-	// Reset resets the signal by removing all subscribers from the signal,
-	// effectively clearing the list of subscribers.
+	// Reset 通过移除所有订阅者来重置信号，
+	// 有效地清除订阅者列表。
 	//
-	// This can be used when you want to stop all listeners from receiving
-	// further signals.
+	// 当您想停止所有监听器接收更多信号时，可以使用此方法。
 	//
-	// Example:
-	//	signal := signals.New[int]()
-	//	signal.AddListener(func(ctx context.Context, payload int) {
-	//		// Listener implementation
-	//		// ...
-	//	})
-	//	signal.Reset() // Removes all listeners
-	//	fmt.Println("Number of subscribers after resetting:", signal.Len())
+	// 示例：
+	// signal := signals.New[int]()
+	// signal.AddListener(func(ctx context.Context, payload int) {
+	//    // 监听器实现
+	//    // ...
+	// })
+	// signal.Reset() // 移除所有监听器
+	// fmt.Println("重置后的订阅者数量：", signal.Len())
 	Reset()
 
-	// Len returns the number of listeners subscribed to the signal.
+	// Len 返回订阅信号的监听器数量。
 	//
-	// This can be used to check how many listeners are currently waiting for a signal.
-	// The returned value is of type int.
+	// 这可用于检查当前有多少监听器在等待信号。
+	// 返回值类型为 int。
 	//
-	// Example:
-	//	signal := signals.NewSync[int]()
-	//	signal.AddListener(func(ctx context.Context, payload int) {
-	//		// Listener implementation
-	//		// ...
-	//	})
-	//	fmt.Println("Number of subscribers:", signal.Len())
+	// 示例：
+	// signal := signals.NewSync[int]()
+	// signal.AddListener(func(ctx context.Context, payload int) {
+	//    // 监听器实现
+	//    // ...
+	// })
+	// fmt.Println("订阅者数量：", signal.Len())
 	Len() int
 
-	// IsEmpty checks if the signal has any subscribers.
+	// IsEmpty 检查信号是否有任何订阅者。
 	//
-	// It returns true if the signal has no subscribers, and false otherwise.
-	// This can be used to check if there are any listeners before emitting a signal.
+	// 如果信号没有订阅者，则返回 true，否则返回 false。
+	// 这可用于在发出信号之前检查是否有任何监听器。
 	//
-	// Example:
-	//	signal := signals.New[int]()
-	//	fmt.Println("Is signal empty?", signal.IsEmpty()) // Should print true
-	//	signal.AddListener(func(ctx context.Context, payload int) {
-	//		// Listener implementation
-	//		// ...
-	//	})
-	//	fmt.Println("Is signal empty?", signal.IsEmpty()) // Should print false
+	// 示例：
+	// signal := signals.New[int]()
+	// fmt.Println("信号是否为空？", signal.IsEmpty()) // 应打印 true
+	// signal.AddListener(func(ctx context.Context, payload int) {
+	//    // 监听器实现
+	//    // ...
+	// })
+	// fmt.Println("信号是否为空？", signal.IsEmpty()) // 应打印 false
 	IsEmpty() bool
 }
