@@ -62,15 +62,20 @@ func (s *AsyncSignal[T]) Emit(ctx context.Context, payload T) error {
 
 			done := make(chan struct{})
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						errChan <- errors.New("listener panicked")
+					}
+					close(done)
+				}()
 				listener(listenerCtx, payload)
-				close(done)
 			}()
 
 			select {
 			case <-listenerCtx.Done():
 				errChan <- listenerCtx.Err()
 			case <-done:
-				// 监听器正常完成
+				// 监听器正常完成或 panic 被捕获
 			}
 		}(sub.listener)
 	}

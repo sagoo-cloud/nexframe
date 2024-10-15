@@ -2,6 +2,7 @@ package signals
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -203,10 +204,14 @@ func TestErrorHandling(t *testing.T) {
 			signal := tc.signal()
 
 			signal.AddListener(func(ctx context.Context, payload int) {
+				fmt.Printf("Listener for %s about to panic\n", tc.name)
 				panic("Listener panic")
 			})
 
+			fmt.Printf("Emitting signal for %s\n", tc.name)
 			err := signal.Emit(context.Background(), 5)
+			fmt.Printf("Emit for %s completed with error: %v\n", tc.name, err)
+
 			if err == nil {
 				t.Errorf("Expected error due to panic in listener, got nil")
 			} else if err.Error() != "listener panicked" {
