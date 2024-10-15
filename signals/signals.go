@@ -18,7 +18,7 @@ type Signal[T any] interface {
 	//		// ...
 	//	})
 	//	signal.Emit(context.Background(), 42)
-	Emit(ctx context.Context, payload T)
+	Emit(ctx context.Context, payload T) error
 
 	// AddListener adds a listener to the signal.
 	//
