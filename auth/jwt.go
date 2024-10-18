@@ -60,6 +60,7 @@ type AuthClaims interface {
 
 // TokenClaims 实现 AuthClaims 接口
 type TokenClaims struct {
+  ID       string `json:"id"`
 	Username  string `json:"username"`
 	TokenType string `json:"token_type"` // "access" 或 "refresh"
 	jwt.RegisteredClaims
@@ -220,7 +221,6 @@ func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
 	defer tokenClaimsPool.Put(claims)
 
 	*claims = TokenClaims{} // 重置claims
-
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		if token.Method.Alg() != jm.conf.SigningMethod.Alg() {
 			return nil, ErrUnSupportSigningMethod
