@@ -1,29 +1,63 @@
 package mqtts
 
 import (
-	"github.com/eclipse/paho.mqtt.golang"
+	"context"
+	"fmt"
 	"github.com/sagoo-cloud/nexframe/configs"
+	"github.com/sagoo-cloud/nexframe/net/mqttclient"
 	"sync"
+	"time"
 )
 
-var ins mqtt.Client
+var ins *mqttclient.Client
 var once sync.Once
 
-func GetIns() mqtt.Client {
+func GetIns() *mqttclient.Client {
 	once.Do(func() {
-		ins = init_mc()
+		ins = initMqtt()
 	})
 	return ins
 }
-func init_mc() mqtt.Client {
+func initMqtt() *mqttclient.Client {
 	config := configs.LoadMqttConfig()
-	opts := mqtt.NewClientOptions().AddBroker(config.Host)
-	opts.SetUsername(config.UserName)
-	opts.SetPassword(config.PassWord)
-	opts.SetClientID(config.ClientID)
-	mc := mqtt.NewClient(opts)
-	if token := mc.Connect(); token.Wait() && token.Error() != nil {
-		return nil
+	// 创建上下文
+	ctx := context.Background()
+	// 创建配置
+	conf := mqttclient.Config{
+		Server:    config.Host,
+		Username:  config.UserName,
+		Password:  config.PassWord,
+		Logger:    nil,
+		LogLevel:  mqttclient.IntToLogLevel(config.LogLevel), // 设置日志级别为INFO
+		QueueSize: 100,                                       // 设置消息队列大小
 	}
-	return mc
+	if config.CAFile != "" && config.CertFile != "" {
+		conf.CAFile = config.CAFile
+		conf.CertFile = config.CertFile
+		conf.CertKeyFile = config.CertKeyFile
+	}
+
+	// 创建MQTT客户端
+	client, err := mqttclient.NewClient(ctx, conf)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+
+	// 监控连接状态
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if !client.IsConnected() {
+					fmt.Println("Client disconnected, waiting for reconnect...")
+				}
+			}
+		}
+	}()
+
+	return client
 }

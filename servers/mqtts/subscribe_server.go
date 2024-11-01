@@ -4,6 +4,7 @@ import (
 	"context"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/sagoo-cloud/nexframe/configs"
+	"github.com/sagoo-cloud/nexframe/net/mqttclient"
 	"github.com/sagoo-cloud/nexframe/servers/commons"
 	"log/slog"
 )
@@ -53,16 +54,22 @@ func (s *Server) work(errChans map[string]chan error) {
 }
 func (s *Server) worker(t string, h *commons.CommHandler, e chan error) {
 	s.Logger.Info("Subscribe topic:%s", t)
-	token := GetIns().Subscribe(t, s.SubscribeQos, func(
-		client mqtt.Client, message mqtt.Message) {
-		if s.Parallel {
-			go s.process(h, message)
-		} else {
-			s.process(h, message)
-		}
-	})
-	if token.Wait() && token.Error() != nil {
-		e <- token.Error()
+	// 创建消息处理器
+	handler := mqttclient.Handler{
+		Topic: t,
+		Qos:   s.SubscribeQos,
+		Handle: func(
+			client mqtt.Client, message mqtt.Message) {
+			if s.Parallel {
+				go s.process(h, message)
+			} else {
+				s.process(h, message)
+			}
+		},
+	}
+	// 注册处理器
+	if err := GetIns().RegisterHandler(handler); err != nil {
+		panic(err)
 	}
 }
 func (s *Server) process(h *commons.CommHandler, Message mqtt.Message) {
@@ -79,9 +86,9 @@ func (s *Server) process(h *commons.CommHandler, Message mqtt.Message) {
 func (s *Server) Close() {
 	if GetIns() != nil {
 		for topic := range s.topics {
-			GetIns().Unsubscribe(topic)
+			GetIns().Close()
 			s.Logger.Info("Unsubscribe topic:%s", topic)
 		}
-		GetIns().Disconnect(250)
+		GetIns().GetClient().Disconnect(uint(250))
 	}
 }

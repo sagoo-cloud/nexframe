@@ -113,4 +113,12 @@ const (
 	MqttParallel     = "mqtt.parallel"
 	MqttSubscribeQos = "mqtt.subscribe_qos"
 	MqttPublishQos   = "mqtt.publish_qos"
+
+	MqttCleanSession         = "mqtt.clean_session"
+	MqttMaxReconnectInterval = "mqtt.max_reconnect_interval"
+	MqttCAFile               = "mqtt.ca_file"
+	MqttCertFile             = "mqtt.cert_file"
+	MqttCertKeyFile          = "mqtt.cert_key_file"
+	MqttLogLevel             = "mqtt.log_level"
+	MqttQueueSize            = "mqtt.queue_size"
 )
