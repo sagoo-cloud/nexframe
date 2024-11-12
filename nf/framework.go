@@ -472,13 +472,30 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 			return
 		}
 
-		// 设置响应
+		// 设置自定义头部信息和响应
 		if headers, ok := results[0].Interface().(contracts.ResponseWithHeaders); ok {
+			// 设置响应头
 			for key, value := range headers.Headers {
 				w.Header().Set(key, value)
 			}
+
+			// 检查是否是文件下载（通过Content-Type判断）
+			if ct, exists := headers.Headers["Content-Type"]; exists && ct == "application/force-download" {
+				// 文件下载的情况，直接写入数据
+				if data, ok := headers.Data.([]byte); ok {
+					_, err := w.Write(data)
+					if err != nil {
+						f.debugOutput("写入文件数据失败", zap.Error(err))
+						http.Error(w, "文件下载失败", http.StatusInternalServerError)
+					}
+					return
+				}
+			}
+
+			// 非文件下载的普通JSON响应
 			contracts.JsonExit(w, 0, "Success", headers.Data)
 		} else {
+			// 普通响应（没有自定义头部）
 			contracts.JsonExit(w, 0, "Success", results[0].Interface())
 		}
 	}
