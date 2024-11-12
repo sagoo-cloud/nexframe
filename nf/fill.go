@@ -77,11 +77,27 @@ func setField(field reflect.Value, value interface{}) error {
 		if err != nil {
 			return err
 		}
+		if field.OverflowInt(intValue) {
+			return fmt.Errorf("整数值 %d 超出类型 %s 范围", intValue, field.Type())
+		}
 		field.SetInt(intValue)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		// 添加对 uint 类型的支持
+		uintValue, err := strconv.ParseUint(fmt.Sprint(value), 10, 64)
+		if err != nil {
+			return err
+		}
+		if field.OverflowUint(uintValue) {
+			return fmt.Errorf("无符号整数值 %d 超出类型 %s 范围", uintValue, field.Type())
+		}
+		field.SetUint(uintValue)
 	case reflect.Float32, reflect.Float64:
 		floatValue, err := strconv.ParseFloat(fmt.Sprint(value), 64)
 		if err != nil {
 			return err
+		}
+		if field.OverflowFloat(floatValue) {
+			return fmt.Errorf("浮点数值 %f 超出类型 %s 范围", floatValue, field.Type())
 		}
 		field.SetFloat(floatValue)
 	case reflect.Bool:
@@ -92,16 +108,21 @@ func setField(field reflect.Value, value interface{}) error {
 		field.SetBool(boolValue)
 	case reflect.Struct:
 		if field.Type() == reflect.TypeOf(time.Time{}) {
-			timeStr, ok := value.(string)
-			if !ok {
-				return fmt.Errorf("expected string for time, got %T", value)
-			}
-			t, err := time.Parse(time.RFC3339, timeStr)
-			if err != nil {
-				return err
-			}
-			field.Set(reflect.ValueOf(t))
+			return setTimeField(field, value)
 		}
+		mapValue, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("expected map[string]interface{} for struct, got %T", value)
+		}
+		return setStructField(field, mapValue)
+	case reflect.Ptr:
+		// 处理指针类型
+		if field.IsNil() {
+			field.Set(reflect.New(field.Type().Elem()))
+		}
+		return setField(field.Elem(), value)
+	case reflect.Slice:
+		return setSliceField(field, value)
 	case reflect.Map:
 		mapValue, ok := value.(map[string]interface{})
 		if !ok {
@@ -120,6 +141,55 @@ func setField(field reflect.Value, value interface{}) error {
 	return nil
 }
 
+// setSliceField 处理切片类型
+func setSliceField(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case []interface{}:
+		slice := reflect.MakeSlice(field.Type(), len(v), len(v))
+		for i := 0; i < len(v); i++ {
+			if err := setField(slice.Index(i), v[i]); err != nil {
+				return err
+			}
+		}
+		field.Set(slice)
+		return nil
+	case string:
+		// 处理单个字符串值作为切片的情况
+		slice := reflect.MakeSlice(field.Type(), 1, 1)
+		if err := setField(slice.Index(0), v); err != nil {
+			return err
+		}
+		field.Set(slice)
+		return nil
+	default:
+		return fmt.Errorf("切片字段需要 slice 类型，得到 %T", value)
+	}
+}
+
+// setTimeField 处理时间类型
+func setTimeField(field reflect.Value, value interface{}) error {
+	switch v := value.(type) {
+	case string:
+		// 尝试多种时间格式
+		layouts := []string{
+			time.RFC3339,
+			"2006-01-02 15:04:05",
+			"2006-01-02",
+		}
+		for _, layout := range layouts {
+			if t, err := time.Parse(layout, v); err == nil {
+				field.Set(reflect.ValueOf(t))
+				return nil
+			}
+		}
+		return fmt.Errorf("无法解析时间字符串 '%s'", v)
+	case time.Time:
+		field.Set(reflect.ValueOf(v))
+		return nil
+	default:
+		return fmt.Errorf("时间字段需要字符串类型，得到 %T", value)
+	}
+}
 func setStructField(field reflect.Value, data map[string]interface{}) error {
 	for i := 0; i < field.NumField(); i++ {
 		structField := field.Type().Field(i)
