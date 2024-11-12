@@ -645,8 +645,20 @@ func (f *APIFramework) decodeStructFromValues(values url.Values, v reflect.Value
 		}
 
 		// 处理切片
+		// 处理切片
 		if field.Type.Kind() == reflect.Slice {
-			sliceValues := values[fieldName]
+			var sliceValues []string
+
+			// 先尝试获取普通数组参数
+			sliceValues = values[fieldName]
+
+			// 如果没有找到普通数组参数，尝试查找 fieldName[] 格式的参数
+			if len(sliceValues) == 0 {
+				arrayKey := fieldName + "[]"
+				sliceValues = values[arrayKey]
+			}
+
+			// 如果找到了值
 			if len(sliceValues) > 0 {
 				slice := reflect.MakeSlice(field.Type, len(sliceValues), len(sliceValues))
 				for i, sliceValue := range sliceValues {
