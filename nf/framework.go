@@ -19,6 +19,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -66,6 +68,8 @@ type APIFramework struct {
 	host           string //主域名
 	HTTPSCertPath  string
 	HTTPSKeyPath   string
+	ctx            context.Context
+	logger         *log.Logger
 }
 
 // NewAPIFramework 创建新的APIFramework实例
@@ -82,6 +86,8 @@ func NewAPIFramework() *APIFramework {
 		initialized:    false,
 		initOnce:       sync.Once{},
 		contextValues:  make(map[contextKey]interface{}),
+		ctx:            context.Background(),
+		logger:         log.New(os.Stdout, "", log.LstdFlags),
 	}
 }
 
@@ -346,29 +352,42 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 			http.Error(w, "Failed to initialize request metadata", http.StatusInternalServerError)
 			return
 		}
-		// 根据 HTTP 方法处理请求
-		switch r.Method {
-		case http.MethodGet:
-			err := f.decodeGetRequest(r, req)
+
+		var err error
+		// 检查是否是文件上传请求，先进行文件上传处理
+		contentType := r.Header.Get("Content-Type")
+		if strings.HasPrefix(contentType, "multipart/form-data") {
+			// 处理文件上传请求
+			err = f.handleMultipartRequest(r, req)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-		case http.MethodPost, http.MethodPut, http.MethodPatch:
-			if err := f.decodeJSONRequest(r, req); err != nil {
-				f.debugOutput("Error decoding JSON request: %v\n", err)
-				http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			// 根据 HTTP 方法处理请求
+			switch r.Method {
+			case http.MethodGet:
+				err := f.decodeGetRequest(r, req)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+			case http.MethodPost, http.MethodPut, http.MethodPatch:
+				if err := f.decodeJSONRequest(r, req); err != nil {
+					f.debugOutput("Error decoding JSON request: %v\n", err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+			case http.MethodDelete:
+				// 对于 DELETE 请求，我们可能需要处理 URL 参数和请求体
+				if err := f.decodeDeleteRequest(r, req); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+			default:
+				http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
 				return
 			}
-		case http.MethodDelete:
-			// 对于 DELETE 请求，我们可能需要处理 URL 参数和请求体
-			if err := f.decodeDeleteRequest(r, req); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		default:
-			http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
-			return
 		}
 
 		if f.debug {
@@ -413,8 +432,109 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 	}
 }
 
+// handleMultipartRequest 处理文件上传请求
+func (f *APIFramework) handleMultipartRequest(r *http.Request, dst interface{}) error {
+	// 检查请求Content-Type
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "multipart/form-data") {
+		return fmt.Errorf("无效的Content-Type: %s, 需要 multipart/form-data", contentType)
+	}
+
+	// 设置最大文件大小限制，默认32MB
+	err := r.ParseMultipartForm(32 << 20)
+	if err != nil {
+		return fmt.Errorf("file parse form: %w", err)
+	}
+
+	if r.MultipartForm == nil || r.MultipartForm.File == nil {
+		return fmt.Errorf("未检测到上传的文件")
+	}
+
+	// Debug输出
+	if f.debug {
+		log.Printf("接收到的表单字段: %v\n", r.MultipartForm.Value)
+		log.Printf("接收到的文件字段: %v\n", r.MultipartForm.File)
+	}
+
+	// 使用反射获取目标结构体的值
+	v := reflect.ValueOf(dst).Elem()
+	t := v.Type()
+
+	// 遍历所有字段
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+
+		// 跳过 Meta 字段
+		if field.Anonymous && field.Type == reflect.TypeOf(g.Meta{}) {
+			continue
+		}
+
+		// 获取字段的json标签作为表单字段名
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" {
+			jsonTag = field.Name
+		}
+		jsonTag = strings.Split(jsonTag, ",")[0]
+
+		// Debug输出
+		if f.debug {
+			log.Printf("处理字段: %s (tag: %s)\n", field.Name, jsonTag)
+		}
+
+		// 如果是文件上传字段
+		if field.Type == reflect.TypeOf([]meta.FileUploadMeta{}) {
+			files := r.MultipartForm.File[jsonTag]
+			if len(files) > 0 {
+				fileMetaSlice := make([]meta.FileUploadMeta, len(files))
+				for i, fileHeader := range files {
+					if f.debug {
+						log.Printf("处理文件: %s, 大小: %d\n", fileHeader.Filename, fileHeader.Size)
+					}
+
+					fileMeta := meta.FileUploadMeta{
+						FileName:   fileHeader.Filename,
+						Size:       fileHeader.Size,
+						FileHeader: fileHeader,
+					}
+
+					// 检测文件类型
+					if err := fileMeta.DetectContentType(); err != nil {
+						return fmt.Errorf("检测文件类型失败: %w", err)
+					}
+
+					fileMetaSlice[i] = fileMeta
+				}
+				v.Field(i).Set(reflect.ValueOf(fileMetaSlice))
+			} else if f.debug {
+				log.Printf("字段 %s 没有接收到文件\n", jsonTag)
+			}
+			continue
+		}
+
+		// 处理普通表单字段
+		if values, ok := r.MultipartForm.Value[jsonTag]; ok && len(values) > 0 {
+			if err := setField(v.Field(i), values[0]); err != nil {
+				return fmt.Errorf("设置字段 %s 失败: %w", field.Name, err)
+			}
+			if f.debug {
+				log.Printf("设置表单字段 %s = %s\n", jsonTag, values[0])
+			}
+		} else if f.debug {
+			log.Printf("字段 %s 没有接收到值\n", jsonTag)
+		}
+	}
+
+	return nil
+}
+
 // decodeJSONRequest 处理 JSON 请求体
 func (f *APIFramework) decodeJSONRequest(r *http.Request, dst interface{}) error {
+	// 检查 Content-Type，如果是 multipart/form-data，则跳过 JSON 解析
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		return nil
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read request body: %v", err)
@@ -786,4 +906,105 @@ func (f *APIFramework) debugOutput(format string, v ...any) {
 	if f.debug {
 		fmt.Printf(format, v...)
 	}
+}
+func (f *APIFramework) Context() context.Context {
+	if f.ctx != nil {
+		return f.ctx
+	}
+	return context.Background()
+}
+
+func (f *APIFramework) handleFileUpload(w http.ResponseWriter, r *http.Request, config FileConfig) (map[string]*UploadedFile, error) {
+	// 检查请求类型
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		return nil, fmt.Errorf("invalid content type, expected multipart/form-data")
+	}
+
+	// 设置最大内存，超过此大小的文件会被存储到临时文件中
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		return nil, fmt.Errorf("failed to parse multipart form: %w", err)
+	}
+
+	var totalSize int64
+	files := make(map[string]*UploadedFile)
+
+	// 遍历所有文件字段
+	for field, headers := range r.MultipartForm.File {
+		fieldConfig, hasConfig := config.Fields[field]
+
+		for _, header := range headers {
+			// 验证文件大小
+			if header.Size > config.MaxFileSize {
+				return nil, fmt.Errorf("file %s exceeds maximum size limit", header.Filename)
+			}
+
+			totalSize += header.Size
+			if totalSize > config.MaxTotalSize {
+				return nil, fmt.Errorf("total upload size exceeds limit")
+			}
+
+			// 验证文件类型
+			file, err := header.Open()
+			if err != nil {
+				return nil, fmt.Errorf("failed to open uploaded file: %w", err)
+			}
+			defer file.Close()
+
+			// 读取文件头以检测实际文件类型
+			buff := make([]byte, 512)
+			_, err = file.Read(buff)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read file header: %w", err)
+			}
+			file.Seek(0, 0) // 重置文件指针
+
+			contentType := http.DetectContentType(buff)
+			isAllowedType := false
+			allowedTypes := config.AllowedTypes
+			if hasConfig {
+				allowedTypes = fieldConfig.AllowTypes
+			}
+			for _, allowed := range allowedTypes {
+				if strings.HasPrefix(contentType, allowed) {
+					isAllowedType = true
+					break
+				}
+			}
+			if !isAllowedType {
+				return nil, fmt.Errorf("file type %s is not allowed", contentType)
+			}
+
+			files[field] = &UploadedFile{
+				Filename:    header.Filename,
+				Size:        header.Size,
+				ContentType: contentType,
+				File:        file,
+				FileHeader:  header,
+			}
+		}
+	}
+
+	return files, nil
+}
+
+// SaveUploadedFile 保存上传的文件
+func (f *APIFramework) SaveUploadedFile(file *UploadedFile, destPath string) error {
+	// 创建目标目录
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// 创建目标文件
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dst.Close()
+
+	// 复制文件内容
+	if _, err = io.Copy(dst, file.File); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"image"
 	"image/color"
 	"image/draw"
@@ -386,4 +387,139 @@ func IsAllowedImageExt(ext string) bool {
 		}
 	}
 	return false
+}
+
+// Exists checks whether given `path` exist.
+func Exists(path string) bool {
+	if stat, err := os.Stat(path); stat != nil && !os.IsNotExist(err) {
+		return true
+	}
+	return false
+}
+
+// IsDir checks whether given `path` a directory.
+// Note that it returns false if the `path` does not exist.
+func IsDir(path string) bool {
+	s, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return s.IsDir()
+}
+
+// Pwd returns absolute path of current working directory.
+// Note that it returns an empty string if retrieving current
+// working directory failed.
+func Pwd() string {
+	path, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+// Chdir changes the current working directory to the named directory.
+// If there is an error, it will be of type *PathError.
+func Chdir(dir string) (err error) {
+	err = os.Chdir(dir)
+	if err != nil {
+		err = gerror.Wrapf(err, `os.Chdir failed with dir "%s"`, dir)
+	}
+	return
+}
+
+// IsFile checks whether given `path` a file, which means it's not a directory.
+// Note that it returns false if the `path` does not exist.
+func IsFile(path string) bool {
+	s, err := Stat(path)
+	if err != nil {
+		return false
+	}
+	return !s.IsDir()
+}
+
+// Stat returns a FileInfo describing the named file.
+// If there is an error, it will be of type *PathError.
+func Stat(path string) (os.FileInfo, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		err = gerror.Wrapf(err, `os.Stat failed for file "%s"`, path)
+	}
+	return info, err
+}
+
+// Move renames (moves) `src` to `dst` path.
+// If `dst` already exists and is not a directory, it'll be replaced.
+func Move(src string, dst string) (err error) {
+	err = os.Rename(src, dst)
+	if err != nil {
+		err = gerror.Wrapf(err, `os.Rename failed from "%s" to "%s"`, src, dst)
+	}
+	return
+}
+
+// Rename is alias of Move.
+// See Move.
+func Rename(src string, dst string) error {
+	return Move(src, dst)
+}
+
+// Mkdir creates directories recursively with given `path`.
+// The parameter `path` is suggested to be an absolute path instead of relative one.
+func Mkdir(path string) (err error) {
+	if err = os.MkdirAll(path, os.ModePerm); err != nil {
+		err = gerror.Wrapf(err, `os.MkdirAll failed for path "%s" with perm "%d"`, path, os.ModePerm)
+		return err
+	}
+	return nil
+}
+func Basename(path string) string {
+	return filepath.Base(path)
+}
+
+// Create creates a file with given `path` recursively.
+// The parameter `path` is suggested to be absolute path.
+func Create(path string) (*os.File, error) {
+	dir := Dir(path)
+	if !Exists(dir) {
+		if err := Mkdir(dir); err != nil {
+			return nil, err
+		}
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		err = gerror.Wrapf(err, `os.Create failed for name "%s"`, path)
+	}
+	return file, err
+}
+func Dir(path string) string {
+	if path == "." {
+		return filepath.Dir(RealPath(path))
+	}
+	return filepath.Dir(path)
+}
+
+// RealPath converts the given `path` to its absolute path
+// and checks if the file path exists.
+// If the file does not exist, return an empty string.
+func RealPath(path string) string {
+	p, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	if !Exists(p) {
+		return ""
+	}
+	return p
+}
+
+// Example:
+// Ext("main.go")  => .go
+// Ext("api.json") => .json
+func Ext(path string) string {
+	ext := filepath.Ext(path)
+	if p := strings.IndexByte(ext, '?'); p != -1 {
+		ext = ext[0:p]
+	}
+	return ext
 }

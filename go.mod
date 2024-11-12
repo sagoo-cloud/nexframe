@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.1
 
 require (
-	github.com/ServiceWeaver/weaver v0.24.5
+	github.com/ServiceWeaver/weaver v0.24.6
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/arl/statsviz v0.6.0
 	github.com/coocood/freecache v1.2.4
@@ -13,6 +13,7 @@ require (
 	github.com/go-openapi/spec v0.21.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang-module/carbon/v2 v2.3.12
+	github.com/google/uuid v1.6.0
 	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
 	github.com/gorilla/context v1.1.2
 	github.com/gorilla/mux v1.8.1
@@ -64,7 +65,6 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/cel-go v0.17.1 // indirect
 	github.com/google/pprof v0.0.0-20230705174524-200ffdc848b8 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
