@@ -5,41 +5,40 @@ import (
 	"time"
 )
 
-// Interface for delegating copy process to type
+// Interface 定义深拷贝接口
 type Interface interface {
 	DeepCopy() interface{}
 }
 
-// Iface is an alias to Copy; this exists for backwards compatibility reasons.
+// Iface 是Copy的别名，为保持向后兼容性而存在
 func Iface(iface interface{}) interface{} {
 	return Copy(iface)
 }
 
-// Copy creates a deep copy of whatever is passed to it and returns the copy
-// in an interface{}.  The returned value will need to be asserted to the
-// correct type.
+// Copy 创建传入值的深度拷贝并返回interface{}
 func Copy(src interface{}) interface{} {
 	if src == nil {
 		return nil
 	}
 
-	// Make the interface a reflect.Value
+	// 将interface转换为reflect.Value
 	original := reflect.ValueOf(src)
 
-	// Make a copy of the same type as the original.
+	// 创建与原值相同类型的拷贝
 	cpy := reflect.New(original.Type()).Elem()
 
-	// Recursively copy the original.
-	copyRecursive(original, cpy)
+	// 初始化visited map用于检测循环引用
+	visited := make(map[uintptr]bool)
 
-	// Return the copy as an interface.
+	// 递归拷贝
+	copyRecursive(original, cpy, visited)
+
 	return cpy.Interface()
 }
 
-// copyRecursive does the actual copying of the interface. It currently has
-// limited support for what it can handle. Add as needed.
-func copyRecursive(original, cpy reflect.Value) {
-	// check for implement deepcopy.Interface
+// copyRecursive 执行实际的递归拷贝
+func copyRecursive(original, cpy reflect.Value, visited map[uintptr]bool) {
+	// 处理实现了deepcopy.Interface的类型
 	if original.CanInterface() {
 		if copier, ok := original.Interface().(Interface); ok {
 			cpy.Set(reflect.ValueOf(copier.DeepCopy()))
@@ -47,73 +46,105 @@ func copyRecursive(original, cpy reflect.Value) {
 		}
 	}
 
-	// handle according to original's Kind
 	switch original.Kind() {
 	case reflect.Ptr:
-		// Get the actual value being pointed to.
+		// 处理nil指针
+		if original.IsNil() {
+			return
+		}
+
+		// 获取被指向的值
 		originalValue := original.Elem()
 
-		// if  it isn't valid, return.
+		// 检查是否是有效值
 		if !originalValue.IsValid() {
 			return
 		}
+
+		// 检测循环引用
+		if originalValue.CanAddr() {
+			ptr := originalValue.UnsafeAddr()
+			if visited[ptr] {
+				return
+			}
+			visited[ptr] = true
+		}
+
+		// 创建新的指针并设置其值
 		cpy.Set(reflect.New(originalValue.Type()))
-		copyRecursive(originalValue, cpy.Elem())
+		copyRecursive(originalValue, cpy.Elem(), visited)
 
 	case reflect.Interface:
-		// If this is a nil, don't do anything
+		// 处理nil接口
 		if original.IsNil() {
 			return
 		}
-		// Get the value for the interface, not the pointer.
+
+		// 获取接口内的值
 		originalValue := original.Elem()
 
-		// Get the value by calling Elem().
+		// 创建新值并递归复制
 		copyValue := reflect.New(originalValue.Type()).Elem()
-		copyRecursive(originalValue, copyValue)
+		copyRecursive(originalValue, copyValue, visited)
 		cpy.Set(copyValue)
 
 	case reflect.Struct:
-		t, ok := original.Interface().(time.Time)
-		if ok {
+		// 特殊处理time.Time类型
+		if t, ok := original.Interface().(time.Time); ok {
 			cpy.Set(reflect.ValueOf(t))
 			return
 		}
-		// Go through each field of the struct and copy it.
+
+		// 复制结构体的每个字段
 		for i := 0; i < original.NumField(); i++ {
-			// The Type's StructField for a given field is checked to see if StructField.PkgPath
-			// is set to determine if the field is exported or not because CanSet() returns false
-			// for settable fields.  I'm not sure why.  -mohae
+			// 跳过未导出字段
 			if original.Type().Field(i).PkgPath != "" {
 				continue
 			}
-			copyRecursive(original.Field(i), cpy.Field(i))
+			copyRecursive(original.Field(i), cpy.Field(i), visited)
 		}
 
 	case reflect.Slice:
+		// 处理nil切片
 		if original.IsNil() {
 			return
 		}
-		// Make a new slice and copy each element.
+
+		// 创建新切片
 		cpy.Set(reflect.MakeSlice(original.Type(), original.Len(), original.Cap()))
+
+		// 复制每个元素
 		for i := 0; i < original.Len(); i++ {
-			copyRecursive(original.Index(i), cpy.Index(i))
+			copyRecursive(original.Index(i), cpy.Index(i), visited)
 		}
 
 	case reflect.Map:
+		// 处理nil map
 		if original.IsNil() {
 			return
 		}
+
+		// 创建新map
 		cpy.Set(reflect.MakeMap(original.Type()))
+
+		// 复制每个键值对
 		for _, key := range original.MapKeys() {
+			// 深拷贝map的key
+			copyKey := reflect.New(key.Type()).Elem()
+			copyRecursive(key, copyKey, visited)
+
+			// 深拷贝map的value
 			originalValue := original.MapIndex(key)
 			copyValue := reflect.New(originalValue.Type()).Elem()
-			copyRecursive(originalValue, copyValue)
-			copyKey := Copy(key.Interface())
-			cpy.SetMapIndex(reflect.ValueOf(copyKey), copyValue)
+			copyRecursive(originalValue, copyValue, visited)
+
+			cpy.SetMapIndex(copyKey, copyValue)
 		}
 
 	default:
-		cpy.Set(original)
+		// 对于基本类型，直接设置值
+		if cpy.CanSet() {
+			cpy.Set(original)
+		}
 	}
 }

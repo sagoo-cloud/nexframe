@@ -2,13 +2,13 @@ package gvar
 
 import (
 	"encoding/json"
+	"github.com/sagoo-cloud/nexframe/utils/deepcopy"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/mohae/deepcopy"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 )
 
