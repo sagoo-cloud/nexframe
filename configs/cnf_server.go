@@ -138,8 +138,8 @@ type ServerConfig struct {
 	OpenApiPath       string `json:"openapiPath"`       // OpenApiPath specifies the OpenApi specification file path.
 	SwaggerPath       string `json:"swaggerPath"`       // SwaggerPath specifies the swagger UI path for route registering.
 	SwaggerUITemplate string `json:"swaggerUITemplate"` // SwaggerUITemplate specifies the swagger UI custom template
-
-	RouteOverWrite bool `json:"routeOverWrite"`
+	MaxUploadSize     int    `json:"maxUploadSize"`
+	RouteOverWrite    bool   `json:"routeOverWrite"`
 }
 
 // staticPathItem 是静态路径配置的项目结构。
@@ -184,6 +184,7 @@ func LoadServerConfig() *ServerConfig {
 		SessionPath:         file.Temp("NexFrameSessions"),
 		SessionCookieMaxAge: EnvDuration(ServerSessionCookieMaxAge, time.Hour*24),
 		SessionCookieOutput: EnvBool(ServerSessionCookieOutput, true),
+		MaxUploadSize:       EnvInt(ServerMaxUploadSize, 32),
 	}
 
 }

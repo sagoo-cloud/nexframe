@@ -15,6 +15,7 @@ import (
 	"github.com/sagoo-cloud/nexframe/os/file"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
+	"go.uber.org/zap"
 	"io"
 	"log"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // contextKey 是用于存储自定义值的键的类型
@@ -39,6 +41,22 @@ type APIDefinition struct {
 	Parameters   []spec.Parameter
 	Responses    *spec.Responses
 }
+
+var (
+	// 请求对象池，用于减少GC压力
+	requestPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 32*1024) // 32KB 缓冲区
+		},
+	}
+)
+
+const (
+	// 默认的文件上传大小限制：32MB
+	defaultMaxMemory = 32 << 20
+	// 默认的请求超时时间：30秒
+	defaultTimeout = 30 * time.Second
+)
 
 // Controller 接口定义控制器的基本结构
 type Controller interface {
@@ -341,92 +359,126 @@ func (f *APIFramework) GetController(name string) (interface{}, bool) {
 // createHandler 创建处理函数
 func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		// 设置固定的 Server 头部
-		w.Header().Set("Server", "NexFrame")
+		// 添加请求超时控制
+		ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+		defer cancel()
+		// 使用对象池获取缓冲区
+		buf := requestPool.Get().([]byte)
+		defer requestPool.Put(buf)
+
 		// 创建请求对象
 		reqValue := reflect.New(def.RequestType.Elem())
 		req := reqValue.Interface()
-		// 直接初始化 Meta
+
+		// 初始化Meta（添加错误处理）
 		if err := meta.InitMeta(req); err != nil {
+			f.debugOutput("初始化Meta失败", zap.Error(err))
 			http.Error(w, "Failed to initialize request metadata", http.StatusInternalServerError)
 			return
 		}
 
+		// panic恢复
+		defer func() {
+			if r := recover(); r != nil {
+				f.debugOutput("Handler panic",
+					zap.Any("panic", r),
+					zap.String("handler", def.HandlerName),
+					zap.Stack("stack"))
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+		}()
+
+		// 处理请求（其余代码保持不变）
 		var err error
-		// 检查是否是文件上传请求，先进行文件上传处理
 		contentType := r.Header.Get("Content-Type")
 		if strings.HasPrefix(contentType, "multipart/form-data") {
-			// 处理文件上传请求
 			err = f.handleMultipartRequest(r, req)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
 		} else {
-			// 根据 HTTP 方法处理请求
 			switch r.Method {
 			case http.MethodGet:
-				err := f.decodeGetRequest(r, req)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
+				err = f.decodeGetRequest(r, req)
 			case http.MethodPost, http.MethodPut, http.MethodPatch:
-				if err := f.decodeJSONRequest(r, req); err != nil {
-					f.debugOutput("Error decoding JSON request: %v\n", err)
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
+				err = f.decodeJSONRequest(r, req)
 			case http.MethodDelete:
-				// 对于 DELETE 请求，我们可能需要处理 URL 参数和请求体
-				if err := f.decodeDeleteRequest(r, req); err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
+				err = f.decodeDeleteRequest(r, req)
 			default:
 				http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
 				return
 			}
 		}
 
-		if f.debug {
-			jsonBytes, _ := json.MarshalIndent(req, "", "  ")
-			log.Printf("Parsed request object:\n%s", string(jsonBytes))
-		}
-
-		if err := g.Validator().Data(req).Run(context.Background()); err != nil {
-			contracts.JsonExit(w, 400, "验证失败: "+err.Error())
+		if err != nil {
+			f.debugOutput("请求处理失败",
+				zap.Error(err),
+				zap.String("handler", def.HandlerName))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		// 获取控制器
-		controllerName := strings.Split(def.HandlerName, ".")[0]
-		controller := f.controllers[controllerName]
+		// 验证请求
+		if err := g.Validator().Data(req).Run(ctx); err != nil {
+			contracts.JsonExit(w, http.StatusBadRequest, "验证失败: "+err.Error())
+			return
+		}
 
-		// 调用控制器方法
-		method := reflect.ValueOf(controller).MethodByName(strings.Split(def.HandlerName, ".")[1])
+		// 获取控制器（添加空指针检查）
+		controllerName := strings.Split(def.HandlerName, ".")[0]
+		controller, ok := f.controllers[controllerName]
+		if !ok {
+			f.debugOutput("控制器未找到", zap.String("controller", controllerName))
+			http.Error(w, "Controller not found", http.StatusInternalServerError)
+			return
+		}
+
+		// 调用方法（添加方法存在检查）
+		methodName := strings.Split(def.HandlerName, ".")[1]
+		method := reflect.ValueOf(controller).MethodByName(methodName)
+		if !method.IsValid() {
+			f.debugOutput("方法未找到",
+				zap.String("controller", controllerName),
+				zap.String("method", methodName))
+			http.Error(w, "Method not found", http.StatusInternalServerError)
+			return
+		}
+
+		// 执行处理方法
 		results := method.Call([]reflect.Value{
 			reflect.ValueOf(ctx),
 			reqValue,
 		})
 
-		// 处理响应
-		if len(results) > 1 && !results[1].IsNil() {
-			err := results[1].Interface().(error)
-			contracts.JsonExit(w, 500, "内部服务器错误: "+err.Error())
+		// 处理响应（添加结果检查）
+		if len(results) < 2 {
+			f.debugOutput("方法返回值数量错误",
+				zap.String("handler", def.HandlerName))
+			http.Error(w, "Invalid handler response", http.StatusInternalServerError)
 			return
 		}
 
-		// 设置自定义头部信息
+		if !results[0].IsValid() {
+			f.debugOutput("方法返回值无效",
+				zap.String("handler", def.HandlerName))
+			http.Error(w, "Invalid handler response", http.StatusInternalServerError)
+			return
+		}
+
+		// 处理错误返回
+		if len(results) > 1 && !results[1].IsNil() {
+			err := results[1].Interface().(error)
+			f.debugOutput("处理请求失败",
+				zap.Error(err),
+				zap.String("handler", def.HandlerName))
+			contracts.JsonExit(w, http.StatusInternalServerError, "内部服务器错误: "+err.Error())
+			return
+		}
+
+		// 设置响应
 		if headers, ok := results[0].Interface().(contracts.ResponseWithHeaders); ok {
 			for key, value := range headers.Headers {
 				w.Header().Set(key, value)
 			}
-			// 成功响应
 			contracts.JsonExit(w, 0, "Success", headers.Data)
 		} else {
-			// 成功响应（没有自定义头部）
 			contracts.JsonExit(w, 0, "Success", results[0].Interface())
 		}
 	}
@@ -440,10 +492,14 @@ func (f *APIFramework) handleMultipartRequest(r *http.Request, dst interface{}) 
 		return fmt.Errorf("无效的Content-Type: %s, 需要 multipart/form-data", contentType)
 	}
 
-	// 设置最大文件大小限制，默认32MB
-	err := r.ParseMultipartForm(32 << 20)
-	if err != nil {
-		return fmt.Errorf("file parse form: %w", err)
+	// 使用配置的最大内存限制
+	maxMemory := defaultMaxMemory
+	if f.config != nil && f.config.MaxUploadSize > 0 {
+		maxMemory = f.config.MaxUploadSize
+	}
+
+	if err := r.ParseMultipartForm(int64(maxMemory)); err != nil {
+		return fmt.Errorf("解析表单失败: %w", err)
 	}
 
 	if r.MultipartForm == nil || r.MultipartForm.File == nil {
@@ -644,7 +700,6 @@ func (f *APIFramework) decodeStructFromValues(values url.Values, v reflect.Value
 			continue
 		}
 
-		// 处理切片
 		// 处理切片
 		if field.Type.Kind() == reflect.Slice {
 			var sliceValues []string

@@ -37,6 +37,7 @@ const (
 	ServerSessionMaxAge       = "server.session.maxAge"
 	ServerSessionCookieMaxAge = "server.session.cookieMaxAge"
 	ServerSessionCookieOutput = "server.session.cookieOutput"
+	ServerMaxUploadSize       = "server.maxUploadSize"
 )
 
 // token配置
