@@ -75,6 +75,14 @@ func GetLogger() Logger {
 	})
 	return globalLogger
 }
+func NewLogger() Logger {
+	globalLogger = &loggerImpl{
+		config: configs.LoadLogConfig(),
+	}
+	globalLogger.init()
+	return globalLogger
+}
+
 func (l *loggerImpl) init() {
 	level, _ := zerolog.ParseLevel(strings.ToLower(l.config.Level))
 	zerolog.SetGlobalLevel(level)

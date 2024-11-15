@@ -1,5 +1,11 @@
 package g
 
+import "github.com/sagoo-cloud/nexframe/utils/meta"
+
+type (
+	Meta = meta.Meta
+)
+
 type (
 	Map        = map[string]interface{}      // Map is alias of frequently-used map type map[string]interface{}.
 	MapAnyAny  = map[interface{}]interface{} // MapAnyAny is alias of frequently-used map type map[interface{}]interface{}.

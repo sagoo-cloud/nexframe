@@ -416,7 +416,7 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 		}
 
 		// 验证请求
-		if err := g.Validator().Data(req).Run(ctx); err != nil {
+		if err := g.Validator.Data(req).Run(ctx); err != nil {
 			contracts.JsonExit(w, http.StatusBadRequest, "验证失败: "+err.Error())
 			return
 		}
