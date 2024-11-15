@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sagoo-cloud/nexframe/configs"
 	"github.com/sagoo-cloud/nexframe/contracts"
-	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/g"
 	"github.com/sagoo-cloud/nexframe/os/file"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"github.com/sagoo-cloud/nexframe/utils/meta"

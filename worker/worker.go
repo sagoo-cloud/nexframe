@@ -10,7 +10,7 @@ import (
 	"github.com/gorhill/cronexpr"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
-	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/g"
 	"github.com/sagoo-cloud/nexframe/os/nx"
 	"github.com/sagoo-cloud/nexframe/utils/guid"
 	"io"
@@ -83,7 +83,7 @@ func (p periodTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) (err 
 	}
 	defer func() {
 		if err != nil {
-			g.Log().Debugf(ctx, "run task failed. uuid: %s task: %s Error:%s", uid, payload, err)
+			g.Log.Debugf(ctx, "run task failed. uuid: %s task: %s Error:%s", uid, payload, err)
 		}
 	}()
 	if p.tk.ops.handler != nil {
@@ -95,7 +95,7 @@ func (p periodTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) (err 
 	} else if p.tk.ops.callback != "" {
 		err = p.httpCallback(ctx, payload)
 	} else {
-		g.Log().Debugf(ctx, "no task handler. uuid: %s task: %s Error:%s", uid, payload, err)
+		g.Log.Debugf(ctx, "no task handler. uuid: %s task: %s Error:%s", uid, payload, err)
 	}
 	// 保存处理次数
 	p.tk.processed(ctx, payload.Uid)
@@ -108,7 +108,7 @@ func (p periodTaskHandler) httpCallback(ctx context.Context, payload Payload) (e
 	body := payload.String()
 	r, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tk.ops.callback, bytes.NewReader([]byte(body)))
 	if err != nil {
-		g.Log().Errorf(ctx, "创建HTTP请求失败: %v", err)
+		g.Log.Errorf(ctx, "创建HTTP请求失败: %v", err)
 		return err
 	}
 	r.Header.Add("Content-Type", "application/json")
@@ -116,20 +116,20 @@ func (p periodTaskHandler) httpCallback(ctx context.Context, payload Payload) (e
 	// 确保响应体正确关闭，防止资源泄漏
 	res, err := client.Do(r)
 	if err != nil {
-		g.Log().Errorf(ctx, "执行HTTP请求失败: %v", err)
+		g.Log.Errorf(ctx, "执行HTTP请求失败: %v", err)
 		return err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			g.Log().Errorf(ctx, "body close err: %v", err)
+			g.Log.Errorf(ctx, "body close err: %v", err)
 		}
 	}(res.Body)
 
 	responseBytes, _ := io.ReadAll(res.Body)
 	if res.StatusCode != http.StatusOK {
 		err = errors.New("HTTP回调状态码异常：" + res.Status)
-		g.Log().Debugf(ctx, "HTTP回调状态码非200: %v 响应内容: %s", err, string(responseBytes))
+		g.Log.Debugf(ctx, "HTTP回调状态码非200: %v 响应内容: %s", err, string(responseBytes))
 		return err
 	}
 	return nil
@@ -211,7 +211,7 @@ func New(options ...func(*Options)) *Worker {
 			mux.Handle(ops.group, h)
 
 			if err := srv.Run(mux); err != nil {
-				g.Log().Debugf(context.Background(), "running task handler failed: %v", err)
+				g.Log.Debugf(context.Background(), "running task handler failed: %v", err)
 			}
 		}()
 
@@ -228,7 +228,7 @@ func New(options ...func(*Options)) *Worker {
 			var h periodTaskHandler
 			h.tk = *worker
 			if err := srv.Run(h); err != nil {
-				g.Log().Debugf(context.Background(), "running task handler failed: %v", err)
+				g.Log.Debugf(context.Background(), "running task handler failed: %v", err)
 			}
 		}()
 	}
@@ -295,7 +295,7 @@ func (wk *Worker) Once(options ...func(*RunOptions)) (err error) {
 		task := asynq.NewTask(wk.ops.group, sendData)
 		_, err := wk.client.Enqueue(task, taskOpts...)
 		if err != nil {
-			g.Log().Debugf(context.Background(), "无法加入任务队列：%v", err)
+			g.Log.Debugf(context.Background(), "无法加入任务队列：%v", err)
 		}
 
 	} else {
@@ -428,7 +428,7 @@ func (wk *Worker) scan() {
 	defer func() {
 		err := wk.lock.Unlock(ctx)
 		if err != nil {
-			g.Log().Errorf(ctx, "unlock failed: %v", err)
+			g.Log.Errorf(ctx, "unlock failed: %v", err)
 		}
 	}()
 	m, _ := wk.redis.HGetAll(ctx, wk.ops.redisPeriodKey).Result()
@@ -547,7 +547,7 @@ func getNext(expr string, timestamp int64) (next int64, err error) {
 
 // 从组中聚合任务
 func aggregate(group string, tasks []*asynq.Task) *asynq.Task {
-	//g.Log().Debugf(context.Background(), "从组 %v 聚合了 %d 个任务", group, len(tasks))
+	//g.Log.Debugf(context.Background(), "从组 %v 聚合了 %d 个任务", group, len(tasks))
 	var payloads []Payload
 	for _, payload := range tasks {
 		var p Payload

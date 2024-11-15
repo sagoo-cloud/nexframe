@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/hibiken/asynq"
-	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/g"
 	"github.com/sagoo-cloud/nexframe/utils/guid"
 	"time"
 )
@@ -61,7 +61,7 @@ func RegisterProcess(p Process) (s *Scheduled) {
 		}
 	}
 	if s.w == nil {
-		g.Log().Debugf(context.Background(), "========== RegisterProcess Worker is nil")
+		g.Log.Debugf(context.Background(), "========== RegisterProcess Worker is nil")
 	}
 	return
 }
@@ -82,7 +82,7 @@ func (s *Scheduled) Push(ctx context.Context, topic string, dataId string, data 
 		WithRunTimeout(timeout),                                 //超时时间
 	)
 	if err != nil {
-		g.Log().Debugf(ctx, "Run Queue TaskWorker %s Error: %v", topic, err)
+		g.Log.Debugf(ctx, "Run Queue TaskWorker %s Error: %v", topic, err)
 	}
 	return
 }
@@ -97,7 +97,7 @@ func (s *Scheduled) Cron(ctx context.Context, topic, cronExpr string, data []byt
 		WithRunPayload(data), //传递参数
 	)
 	if err != nil {
-		g.Log().Debugf(ctx, "Run Cron TaskWorker %s Error: %v", topic, err)
+		g.Log.Debugf(ctx, "Run Cron TaskWorker %s Error: %v", topic, err)
 	}
 	return
 }

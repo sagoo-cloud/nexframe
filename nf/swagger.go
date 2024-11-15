@@ -3,7 +3,7 @@ package nf
 import (
 	"encoding/json"
 	"github.com/go-openapi/spec"
-	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/g"
 	"net/http"
 	"reflect"
 	"strings"

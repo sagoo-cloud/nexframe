@@ -2,7 +2,7 @@ package nf
 
 import (
 	"fmt"
-	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/g"
 	"reflect"
 	"strconv"
 	"strings"

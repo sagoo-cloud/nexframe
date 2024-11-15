@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/hibiken/asynq"
-	"github.com/sagoo-cloud/nexframe/nf/g"
+	"github.com/sagoo-cloud/nexframe/g"
 	"reflect"
 	"time"
 )
