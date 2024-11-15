@@ -600,7 +600,7 @@ func (f *APIFramework) handleMultipartRequest(r *http.Request, dst interface{}) 
 	return nil
 }
 
-// decodeJSONRequest 处理 JSON 请求体
+// decodeJSONRequest 处理 JSON 请求体，支持复杂参数结构
 func (f *APIFramework) decodeJSONRequest(r *http.Request, dst interface{}) error {
 	// 检查 Content-Type，如果是 multipart/form-data，则跳过 JSON 解析
 	contentType := r.Header.Get("Content-Type")
@@ -608,43 +608,170 @@ func (f *APIFramework) decodeJSONRequest(r *http.Request, dst interface{}) error
 		return nil
 	}
 
+	// 根据 Content-Type 选择不同的处理方式
+	if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+		// 处理 form-urlencoded 格式的请求
+		if err := r.ParseForm(); err != nil {
+			return fmt.Errorf("解析表单失败: %w", err)
+		}
+		return f.decodeStructFromValues(r.Form, reflect.ValueOf(dst).Elem())
+	}
+
+	// 处理 JSON 格式的请求
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read request body: %v", err)
+		return fmt.Errorf("读取请求体失败: %v", err)
 	}
 	defer r.Body.Close()
 
-	f.debugOutput("Decoding JSON request for %T\n", dst)
+	f.debugOutput("正在解析 JSON 请求: %T\n", dst)
 
-	// 创建一个临时结构来存储JSON数据
-	var tempData map[string]interface{}
-	if err := json.Unmarshal(body, &tempData); err != nil {
-		return fmt.Errorf("failed to decode JSON: %v", err)
-	}
+	// 尝试直接解析到目标结构
+	if err := json.Unmarshal(body, dst); err != nil {
+		// 如果直接解析失败，尝试使用中间 map 进行解析
+		var tempData map[string]interface{}
+		if err := json.Unmarshal(body, &tempData); err != nil {
+			return fmt.Errorf("JSON解析失败: %v", err)
+		}
 
-	// 使用反射设置字段
-	dstValue := reflect.ValueOf(dst).Elem()
-	for i := 0; i < dstValue.NumField(); i++ {
-		field := dstValue.Type().Field(i)
-		if field.Anonymous {
-			continue // 跳过匿名字段（如g.Meta）
-		}
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" {
-			jsonTag = field.Name
-		}
-		if value, ok := tempData[jsonTag]; ok {
-			if err := setField(dstValue.Field(i), value); err != nil {
-				return fmt.Errorf("error setting field %s: %v", field.Name, err)
-			}
-		}
+		// 递归处理复杂结构
+		return f.setComplexValue(reflect.ValueOf(dst).Elem(), tempData)
 	}
 
 	if f.debug {
 		jsonBytes, _ := json.MarshalIndent(dst, "", "  ")
-		log.Printf("Parsed request object:\n%s", string(jsonBytes))
+		log.Printf("解析后的请求对象:\n%s", string(jsonBytes))
 	}
 
+	return nil
+}
+
+// setComplexValue 处理复杂的值设置，支持嵌套结构
+func (f *APIFramework) setComplexValue(v reflect.Value, data interface{}) error {
+	// 处理空值
+	if data == nil {
+		return nil
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		// 处理结构体
+		m, ok := data.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("无法将 %T 转换为结构体", data)
+		}
+		return f.setStructFields(v, m)
+
+	case reflect.Map:
+		// 处理 map
+		return f.setMapValue(v, data)
+
+	case reflect.Slice:
+		// 处理切片
+		return f.setSliceValue(v, data)
+
+	case reflect.Ptr:
+		// 处理指针
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return f.setComplexValue(v.Elem(), data)
+
+	default:
+		// 处理基本类型
+		return setField(v, data)
+	}
+}
+
+// setStructFields 处理结构体字段的设置
+func (f *APIFramework) setStructFields(v reflect.Value, data map[string]interface{}) error {
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+
+		// 跳过匿名字段
+		if field.Anonymous {
+			continue
+		}
+
+		// 获取字段名
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" {
+			jsonTag = field.Name
+		}
+		jsonTag = strings.Split(jsonTag, ",")[0]
+
+		// 获取字段值
+		if value, ok := data[jsonTag]; ok {
+			if err := f.setComplexValue(v.Field(i), value); err != nil {
+				return fmt.Errorf("设置字段 %s 失败: %w", field.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+// setMapValue 处理 map 类型的设置
+func (f *APIFramework) setMapValue(v reflect.Value, data interface{}) error {
+	if data == nil {
+		return nil
+	}
+
+	// 确保 map 已初始化
+	if v.IsNil() {
+		v.Set(reflect.MakeMap(v.Type()))
+	}
+
+	// 获取 map 的键值类型
+	keyType := v.Type().Key()
+	valueType := v.Type().Elem()
+
+	switch d := data.(type) {
+	case map[string]interface{}:
+		// 处理字符串键的 map
+		for key, val := range d {
+			// 创建并设置键
+			mapKey := reflect.New(keyType).Elem()
+			if err := setField(mapKey, key); err != nil {
+				return fmt.Errorf("设置map键失败: %w", err)
+			}
+
+			// 创建并设置值
+			mapVal := reflect.New(valueType).Elem()
+			if err := f.setComplexValue(mapVal, val); err != nil {
+				return fmt.Errorf("设置map值失败: %w", err)
+			}
+
+			v.SetMapIndex(mapKey, mapVal)
+		}
+	default:
+		return fmt.Errorf("不支持的map数据类型: %T", data)
+	}
+
+	return nil
+}
+
+// setSliceValue 处理切片类型的设置
+func (f *APIFramework) setSliceValue(v reflect.Value, data interface{}) error {
+	slice, ok := data.([]interface{})
+	if !ok {
+		// 尝试处理单个值
+		newSlice := reflect.MakeSlice(v.Type(), 1, 1)
+		if err := f.setComplexValue(newSlice.Index(0), data); err != nil {
+			return fmt.Errorf("设置切片元素失败: %w", err)
+		}
+		v.Set(newSlice)
+		return nil
+	}
+
+	// 创建新切片
+	newSlice := reflect.MakeSlice(v.Type(), len(slice), len(slice))
+	for i, item := range slice {
+		if err := f.setComplexValue(newSlice.Index(i), item); err != nil {
+			return fmt.Errorf("设置切片索引 %d 失败: %w", i, err)
+		}
+	}
+	v.Set(newSlice)
 	return nil
 }
 
@@ -679,17 +806,8 @@ func (f *APIFramework) decodeStructFromValues(values url.Values, v reflect.Value
 
 		// 处理匿名字段
 		if field.Anonymous {
-			if field.Type.Kind() == reflect.Struct {
-				if err := f.decodeStructFromValues(values, fieldValue); err != nil {
-					return err
-				}
-			} else if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct {
-				if fieldValue.IsNil() {
-					fieldValue.Set(reflect.New(field.Type.Elem()))
-				}
-				if err := f.decodeStructFromValues(values, fieldValue.Elem()); err != nil {
-					return err
-				}
+			if err := f.handleAnonymousField(values, fieldValue); err != nil {
+				return err
 			}
 			continue
 		}
@@ -699,85 +817,183 @@ func (f *APIFramework) decodeStructFromValues(values url.Values, v reflect.Value
 			continue
 		}
 
-		// 处理非匿名的嵌套结构体
-		if field.Type.Kind() == reflect.Struct || (field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct) {
-			var structValue reflect.Value
-			if field.Type.Kind() == reflect.Ptr {
-				if fieldValue.IsNil() {
-					fieldValue.Set(reflect.New(field.Type.Elem()))
-				}
-				structValue = fieldValue.Elem()
-			} else {
-				structValue = fieldValue
-			}
-
-			if err := f.decodeStructFromValues(values, structValue); err != nil {
+		// 处理各种字段类型
+		switch field.Type.Kind() {
+		case reflect.Struct:
+			if err := f.handleStructField(values, fieldValue, fieldName); err != nil {
 				return err
 			}
-			continue
-		}
-
-		// 处理切片
-		if field.Type.Kind() == reflect.Slice {
-			var sliceValues []string
-
-			// 先尝试获取普通数组参数
-			sliceValues = values[fieldName]
-
-			// 如果没有找到普通数组参数，尝试查找 fieldName[] 格式的参数
-			if len(sliceValues) == 0 {
-				arrayKey := fieldName + "[]"
-				sliceValues = values[arrayKey]
+		case reflect.Ptr:
+			if err := f.handlePtrField(values, fieldValue, fieldName); err != nil {
+				return err
 			}
-
-			// 如果找到了值
-			if len(sliceValues) > 0 {
-				slice := reflect.MakeSlice(field.Type, len(sliceValues), len(sliceValues))
-				for i, sliceValue := range sliceValues {
-					if err := setField(slice.Index(i), sliceValue); err != nil {
-						return err
-					}
+		case reflect.Slice:
+			if err := f.handleSliceField(values, fieldValue, fieldName, field.Type); err != nil {
+				return err
+			}
+		case reflect.Map:
+			if err := f.handleMapField(values, fieldValue, fieldName, field.Type); err != nil {
+				return err
+			}
+		default:
+			// 处理基本类型
+			if value := values.Get(fieldName); value != "" {
+				if err := setField(fieldValue, value); err != nil {
+					return err
 				}
-				fieldValue.Set(slice)
 			}
-			continue
 		}
+	}
 
-		// 处理 map
-		if field.Type.Kind() == reflect.Map {
-			mapValues := make(map[string][]string)
-			prefix := fieldName + "["
+	return nil
+}
+
+// handleAnonymousField 处理匿名字段
+func (f *APIFramework) handleAnonymousField(values url.Values, fieldValue reflect.Value) error {
+	if fieldValue.Kind() == reflect.Struct {
+		return f.decodeStructFromValues(values, fieldValue)
+	} else if fieldValue.Kind() == reflect.Ptr && fieldValue.Type().Elem().Kind() == reflect.Struct {
+		if fieldValue.IsNil() {
+			fieldValue.Set(reflect.New(fieldValue.Type().Elem()))
+		}
+		return f.decodeStructFromValues(values, fieldValue.Elem())
+	}
+	return nil
+}
+
+// handleStructField 处理结构体字段
+func (f *APIFramework) handleStructField(values url.Values, fieldValue reflect.Value, prefix string) error {
+	// 创建新的前缀用于嵌套结构
+	prefixedValues := make(url.Values)
+	for key, vals := range values {
+		if strings.HasPrefix(key, prefix+".") || strings.HasPrefix(key, prefix+"[") {
+			newKey := strings.TrimPrefix(key, prefix+".")
+			newKey = strings.TrimPrefix(newKey, prefix+"[")
+			newKey = strings.TrimSuffix(newKey, "]")
+			prefixedValues[newKey] = vals
+		}
+	}
+	return f.decodeStructFromValues(prefixedValues, fieldValue)
+}
+
+// handlePtrField 处理指针字段
+func (f *APIFramework) handlePtrField(values url.Values, fieldValue reflect.Value, fieldName string) error {
+	if fieldValue.IsNil() {
+		fieldValue.Set(reflect.New(fieldValue.Type().Elem()))
+	}
+	return f.decodeStructFromValues(values, fieldValue.Elem())
+}
+
+// handleSliceField 处理切片字段
+func (f *APIFramework) handleSliceField(values url.Values, fieldValue reflect.Value, fieldName string, fieldType reflect.Type) error {
+	var sliceValues []string
+
+	// 支持多种数组参数格式
+	patterns := []string{
+		fieldName,        // 普通格式: key=value&key=value
+		fieldName + "[]", // 带方括号格式: key[]=value&key[]=value
+		fieldName + "[",  // 带索引格式: key[0]=value&key[1]=value
+	}
+
+	// 收集所有匹配的值
+	for _, pattern := range patterns {
+		if pattern == fieldName || pattern == fieldName+"[]" {
+			if vals := values[pattern]; len(vals) > 0 {
+				sliceValues = append(sliceValues, vals...)
+			}
+		} else {
+			// 处理带索引的情况
 			for key, vals := range values {
-				if strings.HasPrefix(key, prefix) && strings.HasSuffix(key, "]") {
-					mapKey := key[len(prefix) : len(key)-1]
-					mapValues[mapKey] = vals
+				if strings.HasPrefix(key, pattern) && strings.HasSuffix(key, "]") {
+					sliceValues = append(sliceValues, vals...)
 				}
 			}
-			if len(mapValues) > 0 {
-				mapValue := reflect.MakeMap(field.Type)
-				for key, vals := range mapValues {
-					mapKey := reflect.New(field.Type.Key()).Elem()
-					if err := setField(mapKey, key); err != nil {
-						return err
-					}
-					mapVal := reflect.New(field.Type.Elem()).Elem()
-					if err := setField(mapVal, vals[0]); err != nil {
-						return err
-					}
-					mapValue.SetMapIndex(mapKey, mapVal)
-				}
-				fieldValue.Set(mapValue)
-			}
-			continue
 		}
+	}
 
-		// 处理基本类型
-		value := values.Get(fieldName)
-		if value != "" {
-			if err := setField(fieldValue, value); err != nil {
+	if len(sliceValues) > 0 {
+		slice := reflect.MakeSlice(fieldType, len(sliceValues), len(sliceValues))
+		for i, val := range sliceValues {
+			if err := setField(slice.Index(i), val); err != nil {
 				return err
 			}
 		}
+		fieldValue.Set(slice)
+	}
+
+	return nil
+}
+
+// handleMapField 处理 map 字段，支持复杂的嵌套结构
+func (f *APIFramework) handleMapField(values url.Values, fieldValue reflect.Value, fieldName string, fieldType reflect.Type) error {
+	// 创建新的 map
+	mapValue := reflect.MakeMap(fieldType)
+	keyType := fieldType.Key()
+	elemType := fieldType.Elem()
+
+	// 处理多层嵌套的 map
+	prefix := fieldName + "["
+	suffix := "]"
+
+	// 遍历所有键值对
+	for key, vals := range values {
+		if !strings.HasPrefix(key, prefix) || !strings.HasSuffix(key, suffix) {
+			continue
+		}
+
+		// 提取 map 的键
+		mapKey := key[len(prefix):strings.LastIndex(key, suffix)]
+
+		// 处理嵌套的 map 键
+		if strings.Contains(mapKey, "[") {
+			parts := strings.Split(mapKey, "[")
+			for i := range parts {
+				parts[i] = strings.TrimSuffix(parts[i], "]")
+			}
+
+			// 构建嵌套 map 的值
+			currentMap := mapValue
+			for i := 0; i < len(parts)-1; i++ {
+				keyVal := reflect.New(keyType).Elem()
+				if err := setField(keyVal, parts[i]); err != nil {
+					return fmt.Errorf("设置嵌套map键失败: %w", err)
+				}
+
+				// 如果当前键不存在，创建新的嵌套map
+				if !currentMap.MapIndex(keyVal).IsValid() {
+					nestedMap := reflect.MakeMap(elemType)
+					currentMap.SetMapIndex(keyVal, nestedMap)
+				}
+				currentMap = currentMap.MapIndex(keyVal)
+			}
+
+			// 设置最终的值
+			keyVal := reflect.New(keyType).Elem()
+			if err := setField(keyVal, parts[len(parts)-1]); err != nil {
+				return fmt.Errorf("设置最终map键失败: %w", err)
+			}
+			val := reflect.New(elemType).Elem()
+			if err := setField(val, vals[0]); err != nil {
+				return fmt.Errorf("设置map值失败: %w", err)
+			}
+			currentMap.SetMapIndex(keyVal, val)
+		} else {
+			// 处理简单的 map 键
+			keyVal := reflect.New(keyType).Elem()
+			if err := setField(keyVal, mapKey); err != nil {
+				return fmt.Errorf("设置简单map键失败: %w", err)
+			}
+			val := reflect.New(elemType).Elem()
+			if err := setField(val, vals[0]); err != nil {
+				return fmt.Errorf("设置简单map值失败: %w", err)
+			}
+			mapValue.SetMapIndex(keyVal, val)
+		}
+	}
+
+	// 只有在有值的情况下才设置 map
+	if mapValue.Len() > 0 {
+		fieldValue.Set(mapValue)
 	}
 
 	return nil
