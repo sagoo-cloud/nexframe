@@ -176,10 +176,10 @@ func WithGroupMaxSize(second int) func(*Options) {
 
 // WithOptions 设置任务处理器的配置
 func getOptionsOrSetDefault(options *Options) *Options {
-	addr := g.Cfg().GetString("redis.default.address")
-	db := g.Cfg().GetString("redis.default.db")
-	user := g.Cfg().GetString("redis.default.user", "default")
-	pass := g.Cfg().GetString("redis.default.pass")
+	addr := g.Cfg.GetString("redis.default.address")
+	db := g.Cfg.GetString("redis.default.db")
+	user := g.Cfg.GetString("redis.default.user", "default")
+	pass := g.Cfg.GetString("redis.default.pass")
 	redisUri := "redis://127.0.0.1/0"
 	if pass != "" {
 		redisUri = fmt.Sprintf("redis://%s:%s@%s/%s", user, pass, addr, db)
@@ -188,16 +188,16 @@ func getOptionsOrSetDefault(options *Options) *Options {
 
 	}
 
-	retention := g.Cfg().GetInt("task.retention", 60)
-	maxRetry := g.Cfg().GetInt("task.maxRetry", 2)
-	clearArchived := g.Cfg().GetInt("task.clearArchived", 300)
-	timeout := g.Cfg().GetInt("task.timeout", 30)
-	concurrencyNum := g.Cfg().GetInt("task.concurrencyNum", 100)
+	retention := g.Cfg.GetInt("task.retention", 60)
+	maxRetry := g.Cfg.GetInt("task.maxRetry", 2)
+	clearArchived := g.Cfg.GetInt("task.clearArchived", 300)
+	timeout := g.Cfg.GetInt("task.timeout", 30)
+	concurrencyNum := g.Cfg.GetInt("task.concurrencyNum", 100)
 
-	groupMaxSize := g.Cfg().GetInt("task.groupMaxSize", 100)
-	groupMaxDelay := g.Cfg().GetInt("task.groupMaxDelay", 3000)
-	groupGracePeriod := g.Cfg().GetInt("task.groupGracePeriod", 300)
-	redisLinkMode := g.Cfg().GetString("redis.default.mode", "single")
+	groupMaxSize := g.Cfg.GetInt("task.groupMaxSize", 100)
+	groupMaxDelay := g.Cfg.GetInt("task.groupMaxDelay", 3000)
+	groupGracePeriod := g.Cfg.GetInt("task.groupGracePeriod", 300)
+	redisLinkMode := g.Cfg.GetString("redis.default.mode", "single")
 
 	if options == nil {
 		return &Options{
