@@ -60,9 +60,10 @@ type AuthClaims interface {
 
 // TokenClaims 实现 AuthClaims 接口
 type TokenClaims struct {
-  ID       string `json:"id"`
+	ID        string `json:"id"`
 	Username  string `json:"username"`
 	TokenType string `json:"token_type"` // "access" 或 "refresh"
+	Data      interface{}
 	jwt.RegisteredClaims
 }
 
@@ -243,6 +244,7 @@ func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
 		Username:         claims.Username,
 		TokenType:        claims.TokenType,
 		RegisteredClaims: claims.RegisteredClaims,
+		Data:             claims.Data,
 	}
 
 	return returnClaims, nil
