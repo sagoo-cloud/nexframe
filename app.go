@@ -1,4 +1,5 @@
-// Package nexframe 提供了创建API服务框架的主入口。
+// NexFrame是一款基于 Go 语言免费开源的，快速、简单的企业级应用开发框架，旨在为开发者提供高效、可靠、可扩展的应用开发框架。
+// 通过集成ServiceWeaver服务能力，实现单体开发，微服务运行的效果。
 package nexframe
 
 import "github.com/sagoo-cloud/nexframe/nf"

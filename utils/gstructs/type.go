@@ -1,14 +1,26 @@
 package gstructs
 
-// Signature returns a unique string as this type.
+// Signature 返回类型的唯一签名
 func (t Type) Signature() string {
+	if t.Type == nil {
+		return ""
+	}
 	return t.PkgPath() + "/" + t.String()
 }
 
-// FieldKeys returns the keys of current struct/map.
+// FieldKeys 返回当前结构体/映射的键
 func (t Type) FieldKeys() []string {
-	keys := make([]string, t.NumField())
-	for i := 0; i < t.NumField(); i++ {
+	if t.Type == nil {
+		return nil
+	}
+
+	numField := t.NumField()
+	if numField == 0 {
+		return nil
+	}
+
+	keys := make([]string, numField)
+	for i := 0; i < numField; i++ {
 		keys[i] = t.Field(i).Name
 	}
 	return keys

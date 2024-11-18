@@ -1,29 +1,78 @@
 package gstructs
 
 import (
-	"github.com/sagoo-cloud/nexframe/utils"
-	"github.com/sagoo-cloud/nexframe/utils/empty"
-	"github.com/sagoo-cloud/nexframe/utils/tag"
 	"reflect"
+	"sync"
+
+	"github.com/sagoo-cloud/nexframe/utils"
+	"github.com/sagoo-cloud/nexframe/utils/tag"
 )
 
-// Tag returns the value associated with key in the tag string. If there is no
-// such key in the tag, Tag returns the empty string.
+// tagCacheKey 用于标识字段的缓存键
+type tagCacheKey struct {
+	pkg    string  // 包路径
+	typ    string  // 类型名
+	name   string  // 字段名
+	offset uintptr // 字段偏移量
+}
+
+// 创建缓存键
+func newTagCacheKey(field reflect.StructField) tagCacheKey {
+	return tagCacheKey{
+		pkg:    field.PkgPath,
+		typ:    field.Type.String(),
+		name:   field.Name,
+		offset: field.Offset,
+	}
+}
+
+// 字段缓存，用于存储已解析的标签信息
+var tagCache = struct {
+	sync.RWMutex
+	m map[tagCacheKey]map[string]string
+}{
+	m: make(map[tagCacheKey]map[string]string),
+}
+
+// Tag 返回字段标签中与key关联的值
 func (f *Field) Tag(key string) string {
+	if f == nil || !f.Value.IsValid() {
+		return ""
+	}
+
+	cacheKey := newTagCacheKey(f.Field)
+
+	// 先查找缓存
+	tagCache.RLock()
+	if cachedTags, ok := tagCache.m[cacheKey]; ok {
+		if value, exists := cachedTags[key]; exists {
+			tagCache.RUnlock()
+			return value
+		}
+	}
+	tagCache.RUnlock()
+
 	s := f.Field.Tag.Get(key)
 	if s != "" {
 		s = tag.Parse(s)
+
+		// 更新缓存
+		tagCache.Lock()
+		if _, ok := tagCache.m[cacheKey]; !ok {
+			tagCache.m[cacheKey] = make(map[string]string)
+		}
+		tagCache.m[cacheKey][key] = s
+		tagCache.Unlock()
 	}
 	return s
 }
 
-// TagLookup returns the value associated with key in the tag string.
-// If the key is present in the tag the value (which may be empty)
-// is returned. Otherwise, the returned value will be the empty string.
-// The ok return value reports whether the value was explicitly set in
-// the tag string. If the tag does not have the conventional format,
-// the value returned by Lookup is unspecified.
+// TagLookup 返回字段标签中与key关联的值和是否存在的标志
 func (f *Field) TagLookup(key string) (value string, ok bool) {
+	if f == nil || !f.Value.IsValid() {
+		return "", false
+	}
+
 	value, ok = f.Field.Tag.Lookup(key)
 	if ok && value != "" {
 		value = tag.Parse(value)
@@ -31,56 +80,74 @@ func (f *Field) TagLookup(key string) (value string, ok bool) {
 	return
 }
 
-// IsEmbedded returns true if the given field is an anonymous field (embedded)
+// IsEmbedded 返回字段是否为嵌入字段
 func (f *Field) IsEmbedded() bool {
-	return f.Field.Anonymous
+	return f != nil && f.Field.Anonymous
 }
 
-// TagStr returns the tag string of the field.
+// TagStr 返回字段的标签字符串
 func (f *Field) TagStr() string {
+	if f == nil {
+		return ""
+	}
 	return string(f.Field.Tag)
 }
 
-// TagMap returns all the tag of the field along with its value string as map.
+// TagMap 返回字段的所有标签及其值的映射
 func (f *Field) TagMap() map[string]string {
-	var (
-		data = ParseTag(f.TagStr())
-	)
+	if f == nil {
+		return nil
+	}
+
+	data := ParseTag(f.TagStr())
+	if len(data) == 0 {
+		return nil
+	}
+
 	for k, v := range data {
 		data[k] = utils.StripSlashes(tag.Parse(v))
 	}
 	return data
 }
 
-// IsExported returns true if the given field is exported.
+// IsExported 返回字段是否为导出字段
 func (f *Field) IsExported() bool {
-	return f.Field.PkgPath == ""
+	return f != nil && f.Field.PkgPath == ""
 }
 
-// Name returns the name of the given field.
+// Name 返回字段名
 func (f *Field) Name() string {
+	if f == nil {
+		return ""
+	}
 	return f.Field.Name
 }
 
-// Type returns the type of the given field.
-// Note that this Type is not reflect.Type. If you need reflect.Type, please use Field.Type().Type.
+// Type 返回字段类型
 func (f *Field) Type() Type {
-	return Type{
-		Type: f.Field.Type,
+	if f == nil {
+		return Type{}
 	}
+	return Type{Type: f.Field.Type}
 }
 
-// Kind returns the reflect.Kind for Value of Field `f`.
+// Kind 返回字段值的Kind
 func (f *Field) Kind() reflect.Kind {
+	if f == nil || !f.Value.IsValid() {
+		return reflect.Invalid
+	}
 	return f.Value.Kind()
 }
 
-// OriginalKind retrieves and returns the original reflect.Kind for Value of Field `f`.
+// OriginalKind 返回字段值的原始Kind（解引用后）
 func (f *Field) OriginalKind() reflect.Kind {
-	var (
-		reflectType = f.Value.Type()
-		reflectKind = reflectType.Kind()
-	)
+	if f == nil || !f.Value.IsValid() {
+		return reflect.Invalid
+	}
+
+	reflectType := f.Value.Type()
+	reflectKind := reflectType.Kind()
+
 	for reflectKind == reflect.Ptr {
 		reflectType = reflectType.Elem()
 		reflectKind = reflectType.Kind()
@@ -89,13 +156,15 @@ func (f *Field) OriginalKind() reflect.Kind {
 	return reflectKind
 }
 
-// OriginalValue retrieves and returns the original reflect.Value of Field `f`.
+// OriginalValue 返回字段的原始值（解引用后）
 func (f *Field) OriginalValue() reflect.Value {
-	var (
-		reflectValue = f.Value
-		reflectType  = reflectValue.Type()
-		reflectKind  = reflectType.Kind()
-	)
+	if f == nil || !f.Value.IsValid() {
+		return reflect.Value{}
+	}
+
+	reflectValue := f.Value
+	reflectType := reflectValue.Type()
+	reflectKind := reflectType.Kind()
 
 	for reflectKind == reflect.Ptr && !f.IsNil() {
 		reflectValue = reflectValue.Elem()
@@ -105,12 +174,48 @@ func (f *Field) OriginalValue() reflect.Value {
 	return reflectValue
 }
 
-// IsEmpty checks and returns whether the value of this Field is empty.
+// IsEmpty 检查字段值是否为空
 func (f *Field) IsEmpty() bool {
-	return empty.IsEmpty(f.Value)
+	if f == nil || !f.Value.IsValid() {
+		return true
+	}
+
+	switch f.Value.Kind() {
+	case reflect.Bool:
+		return !f.Value.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return f.Value.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return f.Value.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return f.Value.Float() == 0
+	case reflect.Complex64, reflect.Complex128:
+		return f.Value.Complex() == 0
+	case reflect.String:
+		return f.Value.String() == ""
+	case reflect.Array, reflect.Slice:
+		return f.Value.Len() == 0
+	case reflect.Map, reflect.Chan:
+		return f.Value.Len() == 0
+	case reflect.Ptr, reflect.Interface:
+		return f.Value.IsNil()
+	default:
+		return false
+	}
 }
 
-// IsNil checks and returns whether the value of this Field is nil.
+// IsNil 检查字段值是否为nil
 func (f *Field) IsNil(traceSource ...bool) bool {
-	return empty.IsNil(f.Value, traceSource...)
+	if f == nil || !f.Value.IsValid() {
+		return true
+	}
+
+	switch f.Value.Kind() {
+	case reflect.Chan, reflect.Func,
+		reflect.Interface, reflect.Map,
+		reflect.Ptr, reflect.Slice:
+		return f.Value.IsNil()
+	default:
+		return false
+	}
 }

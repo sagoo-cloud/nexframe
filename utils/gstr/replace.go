@@ -3,11 +3,25 @@ package gstr
 import (
 	"github.com/sagoo-cloud/nexframe/utils"
 	"strings"
+	"sync"
 )
 
-// Replace returns a copy of the string `origin`
-// in which string `search` replaced by `replace` case-sensitively.
+// 用于存储临时字符串的对象池
+var builderPool = sync.Pool{
+	New: func() interface{} {
+		return new(strings.Builder)
+	},
+}
+
+// Replace 返回字符串origin的一个副本
+// 其中search字符串被replace替换，区分大小写
+// count参数控制替换次数，默认为-1表示替换所有
 func Replace(origin, search, replace string, count ...int) string {
+	// 当搜索串为空时，直接返回原字符串
+	if search == "" {
+		return origin
+	}
+
 	n := -1
 	if len(count) > 0 {
 		n = count[0]
@@ -15,9 +29,15 @@ func Replace(origin, search, replace string, count ...int) string {
 	return strings.Replace(origin, search, replace, n)
 }
 
-// ReplaceI returns a copy of the string `origin`
-// in which string `search` replaced by `replace` case-insensitively.
+// ReplaceI 返回字符串origin的一个副本
+// 其中search字符串被replace替换，不区分大小写
+// count参数控制替换次数，默认为-1表示替换所有
 func ReplaceI(origin, search, replace string, count ...int) string {
+	// 参数验证
+	if origin == "" || search == "" {
+		return origin
+	}
+
 	n := -1
 	if len(count) > 0 {
 		n = count[0]
@@ -25,63 +45,112 @@ func ReplaceI(origin, search, replace string, count ...int) string {
 	if n == 0 {
 		return origin
 	}
-	var (
-		searchLength  = len(search)
-		replaceLength = len(replace)
-		searchLower   = strings.ToLower(search)
-		originLower   string
-		pos           int
-	)
+
+	// 获取Builder
+	builder := builderPool.Get().(*strings.Builder)
+	defer func() {
+		builder.Reset()
+		builderPool.Put(builder)
+	}()
+
+	searchLower := strings.ToLower(search)
+	originLower := strings.ToLower(origin)
+	searchLen := len(search)
+
+	lastPos := 0
+	pos := 0
+
+	// 使用Builder进行字符串拼接
 	for {
-		originLower = strings.ToLower(origin)
-		if pos = Pos(originLower, searchLower, pos); pos != -1 {
-			origin = origin[:pos] + replace + origin[pos+searchLength:]
-			pos += replaceLength
-			if n--; n == 0 {
-				break
-			}
-		} else {
+		pos = strings.Index(originLower[lastPos:], searchLower)
+		if pos == -1 || (n <= 0 && n != -1) {
+			builder.WriteString(origin[lastPos:])
 			break
 		}
+		pos += lastPos
+		builder.WriteString(origin[lastPos:pos])
+		builder.WriteString(replace)
+		lastPos = pos + searchLen
+
+		if n > 0 {
+			n--
+		}
 	}
-	return origin
+
+	return builder.String()
 }
 
-// ReplaceByArray returns a copy of `origin`,
-// which is replaced by a slice in order, case-sensitively.
+// ReplaceByArray 使用字符串数组进行替换，区分大小写
+// array中的元素按照pairs处理：array[0]替换为array[1]，array[2]替换为array[3]，以此类推
 func ReplaceByArray(origin string, array []string) string {
-	for i := 0; i < len(array); i += 2 {
-		if i+1 >= len(array) {
-			break
-		}
-		origin = Replace(origin, array[i], array[i+1])
+	if len(array) < 2 {
+		return origin
 	}
-	return origin
+
+	builder := builderPool.Get().(*strings.Builder)
+	defer func() {
+		builder.Reset()
+		builderPool.Put(builder)
+	}()
+
+	builder.WriteString(origin)
+	result := builder.String()
+
+	for i := 0; i < len(array)-1; i += 2 {
+		result = Replace(result, array[i], array[i+1])
+	}
+	return result
 }
 
-// ReplaceIByArray returns a copy of `origin`,
-// which is replaced by a slice in order, case-insensitively.
+// ReplaceIByArray 使用字符串数组进行替换，不区分大小写
+// array中的元素按照pairs处理：array[0]替换为array[1]，array[2]替换为array[3]，以此类推
 func ReplaceIByArray(origin string, array []string) string {
-	for i := 0; i < len(array); i += 2 {
-		if i+1 >= len(array) {
-			break
-		}
-		origin = ReplaceI(origin, array[i], array[i+1])
+	if len(array) < 2 {
+		return origin
 	}
-	return origin
+
+	builder := builderPool.Get().(*strings.Builder)
+	defer func() {
+		builder.Reset()
+		builderPool.Put(builder)
+	}()
+
+	builder.WriteString(origin)
+	result := builder.String()
+
+	for i := 0; i < len(array)-1; i += 2 {
+		result = ReplaceI(result, array[i], array[i+1])
+	}
+	return result
 }
 
-// ReplaceByMap returns a copy of `origin`,
-// which is replaced by a map in unordered way, case-sensitively.
+// ReplaceByMap 使用map进行替换，区分大小写
+// replaces中的key会被替换为对应的value
 func ReplaceByMap(origin string, replaces map[string]string) string {
+	if len(replaces) == 0 {
+		return origin
+	}
 	return utils.ReplaceByMap(origin, replaces)
 }
 
-// ReplaceIByMap returns a copy of `origin`,
-// which is replaced by a map in unordered way, case-insensitively.
+// ReplaceIByMap 使用map进行替换，不区分大小写
+// replaces中的key会被替换为对应的value
 func ReplaceIByMap(origin string, replaces map[string]string) string {
-	for k, v := range replaces {
-		origin = ReplaceI(origin, k, v)
+	if len(replaces) == 0 {
+		return origin
 	}
-	return origin
+
+	builder := builderPool.Get().(*strings.Builder)
+	defer func() {
+		builder.Reset()
+		builderPool.Put(builder)
+	}()
+
+	builder.WriteString(origin)
+	result := builder.String()
+
+	for k, v := range replaces {
+		result = ReplaceI(result, k, v)
+	}
+	return result
 }

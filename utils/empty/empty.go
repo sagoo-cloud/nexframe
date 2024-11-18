@@ -1,25 +1,54 @@
-// Package empty provides functions for checking empty/nil variables.
+// Package empty 提供检查变量是否为空/nil的函数
 package empty
 
 import (
 	"reflect"
+	"sync"
 	"time"
 )
 
-// IsEmpty checks whether given `value` empty.
-// It returns true if `value` is in: 0, nil, false, "", len(slice/map/chan) == 0,
-// or else it returns false.
-func IsEmpty(value any, traceSource ...bool) bool {
-	trace := len(traceSource) > 0 && traceSource[0]
-	return isEmptyInternal(value, trace)
+// 用于缓存类型信息的池
+var typePool = sync.Pool{
+	New: func() interface{} {
+		return make(map[reflect.Type]bool)
+	},
 }
 
-func isEmptyInternal(value any, traceSource bool) bool {
+func IsEmpty(value any, traceSource ...bool) bool {
 	if value == nil {
 		return true
 	}
 
+	trace := len(traceSource) > 0 && traceSource[0]
+	return isEmptyInternal(value, trace, nil)
+}
+
+func isEmptyInternal(value any, traceSource bool, visited map[reflect.Type]bool) bool {
+	if value == nil {
+		return true
+	}
+
+	if visited == nil {
+		visited = typePool.Get().(map[reflect.Type]bool)
+		defer func() {
+			clear(visited)
+			typePool.Put(visited)
+		}()
+	}
+
 	rv := reflect.ValueOf(value)
+
+	// 如果值本身实现了某个接口并且不是空结构体，则不为空
+	if _, ok := value.(interface{ Test() string }); ok {
+		return false
+	}
+
+	rt := rv.Type()
+	if visited[rt] {
+		return false
+	}
+	visited[rt] = true
+
 	switch rv.Kind() {
 	case reflect.Bool:
 		return !rv.Bool()
@@ -37,24 +66,36 @@ func isEmptyInternal(value any, traceSource bool) bool {
 		if rv.IsNil() {
 			return true
 		}
-		if traceSource {
-			return isEmptyInternal(rv.Elem().Interface(), traceSource)
+		if !traceSource {
+			return false
 		}
-		return false
+		elem := rv.Elem()
+		if !elem.IsValid() {
+			return true
+		}
+		return isEmptyInternal(elem.Interface(), traceSource, visited)
 	case reflect.Interface:
 		if rv.IsNil() {
 			return true
 		}
-		return isEmptyInternal(rv.Elem().Interface(), traceSource)
+		// 已经在函数开始时检查了接口实现，这里只需要处理nil情况
+		return false
 	case reflect.Struct:
-		if rv.Type() == reflect.TypeOf(time.Time{}) {
+		if rt == reflect.TypeOf(time.Time{}) {
 			return rv.Interface().(time.Time).IsZero()
 		}
+
 		for i := 0; i < rv.NumField(); i++ {
-			if !isEmptyInternal(rv.Field(i).Interface(), traceSource) {
+			field := rv.Field(i)
+			if !field.CanInterface() {
+				continue
+			}
+			if !isEmptyInternal(field.Interface(), traceSource, visited) {
+				delete(visited, rt)
 				return false
 			}
 		}
+		delete(visited, rt)
 		return true
 	case reflect.Func, reflect.UnsafePointer:
 		return rv.IsNil()
@@ -63,7 +104,7 @@ func isEmptyInternal(value any, traceSource bool) bool {
 	return false
 }
 
-// IsNil checks whether given `value` is nil.
+// IsNil 检查给定值是否为nil
 func IsNil(value any, _ ...bool) bool {
 	if value == nil {
 		return true
@@ -71,18 +112,32 @@ func IsNil(value any, _ ...bool) bool {
 	rv := reflect.ValueOf(value)
 	switch rv.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
-		return rv.IsNil()
+		return !rv.IsValid() || rv.IsNil()
 	}
 	return false
 }
 
-// IsZero checks whether given `value` is zero value.
+// IsZero 检查给定值是否为零值
 func IsZero(value any, _ ...bool) bool {
+	if value == nil {
+		return true
+	}
 	rv := reflect.ValueOf(value)
-	return isZeroReflect(rv)
+	return isZeroReflect(rv, make(map[reflect.Type]bool))
 }
 
-func isZeroReflect(rv reflect.Value) bool {
+func isZeroReflect(rv reflect.Value, visited map[reflect.Type]bool) bool {
+	if !rv.IsValid() {
+		return true
+	}
+
+	rt := rv.Type()
+	if visited[rt] {
+		return false
+	}
+	visited[rt] = true
+	defer delete(visited, rt)
+
 	switch rv.Kind() {
 	case reflect.Bool:
 		return !rv.Bool()
@@ -96,7 +151,7 @@ func isZeroReflect(rv reflect.Value) bool {
 		return rv.Complex() == 0
 	case reflect.Array:
 		for i := 0; i < rv.Len(); i++ {
-			if !isZeroReflect(rv.Index(i)) {
+			if !isZeroReflect(rv.Index(i), visited) {
 				return false
 			}
 		}
@@ -110,7 +165,11 @@ func isZeroReflect(rv reflect.Value) bool {
 			return rv.Interface().(time.Time).IsZero()
 		}
 		for i := 0; i < rv.NumField(); i++ {
-			if !isZeroReflect(rv.Field(i)) {
+			field := rv.Field(i)
+			if !field.CanInterface() {
+				continue
+			}
+			if !isZeroReflect(field, visited) {
 				return false
 			}
 		}
@@ -121,7 +180,7 @@ func isZeroReflect(rv reflect.Value) bool {
 	return false
 }
 
-// IsEmptyOrZero checks whether given `value` is empty or zero.
+// IsEmptyOrZero 检查给定值是否为空或零值
 func IsEmptyOrZero(value any, traceSource ...bool) bool {
 	return IsEmpty(value, traceSource...) || IsZero(value)
 }

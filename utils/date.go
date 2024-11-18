@@ -50,19 +50,26 @@ func GetWeekDay() (start, end string) {
 	defer putTimeToPool(startTime)
 	defer putTimeToPool(endTime)
 
+	// 计算本周一
 	*startTime = now.AddDate(0, 0, -int(weekday)+int(time.Monday))
 	if weekday == time.Sunday {
 		*startTime = startTime.AddDate(0, 0, -7)
 	}
+
+	// 计算本周日 - 从周一开始加6天
 	*endTime = startTime.AddDate(0, 0, 6)
+
+	// 设置具体时间
+	*startTime = time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
+	*endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 0, endTime.Location())
 
 	startBuf := getBufferFromPool()
 	endBuf := getBufferFromPool()
 	defer putBufferToPool(startBuf)
 	defer putBufferToPool(endBuf)
 
-	startBuf = startTime.AppendFormat(startBuf, "2006-01-02 00:00:00")
-	endBuf = endTime.AppendFormat(endBuf, "2006-01-02 23:59:59")
+	startBuf = startTime.AppendFormat(startBuf, "2006-01-02 15:04:05")
+	endBuf = endTime.AppendFormat(endBuf, "2006-01-02 15:04:05")
 
 	return string(startBuf), string(endBuf)
 }

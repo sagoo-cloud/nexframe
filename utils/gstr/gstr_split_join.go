@@ -1,76 +1,123 @@
+// Package gstr 提供字符串处理的工具函数
 package gstr
 
 import (
 	"github.com/sagoo-cloud/nexframe/utils"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"strings"
+	"sync"
 )
 
-// Split splits string `str` by a string `delimiter`, to an array.
+// 用于ChunkSplit的内存池，减少内存分配
+var runePool = sync.Pool{
+	New: func() interface{} {
+		// 预分配一个合理大小的切片
+		return make([]rune, 0, 1024)
+	},
+}
+
+// Split 使用分隔符将字符串分割为切片
 func Split(str, delimiter string) []string {
+	if str == "" || delimiter == "" {
+		return nil
+	}
 	return strings.Split(str, delimiter)
 }
 
-// SplitAndTrim splits string `str` by a string `delimiter` to an array,
-// and calls Trim to every element of this array. It ignores the elements
-// which are empty after Trim.
+// SplitAndTrim 分割字符串并对结果进行修剪
 func SplitAndTrim(str, delimiter string, characterMask ...string) []string {
+	if str == "" || delimiter == "" {
+		return nil
+	}
 	return utils.SplitAndTrim(str, delimiter, characterMask...)
 }
 
-// Join concatenates the elements of `array` to create a single string. The separator string
-// `sep` is placed between elements in the resulting string.
+// Join 使用分隔符连接字符串切片
 func Join(array []string, sep string) string {
+	if len(array) == 0 {
+		return ""
+	}
 	return strings.Join(array, sep)
 }
 
-// JoinAny concatenates the elements of `array` to create a single string. The separator string
-// `sep` is placed between elements in the resulting string.
-//
-// The parameter `array` can be any type of slice, which be converted to string array.
+// JoinAny 连接任意类型的切片为字符串
 func JoinAny(array interface{}, sep string) string {
-	return strings.Join(convert.Strings(array), sep)
+	if array == nil {
+		return ""
+	}
+	strs := convert.Strings(array)
+	if len(strs) == 0 {
+		return ""
+	}
+	return strings.Join(strs, sep)
 }
 
-// Explode splits string `str` by a string `delimiter`, to an array.
-// See http://php.net/manual/en/function.explode.php.
+// Explode PHP风格的字符串分割函数
 func Explode(delimiter, str string) []string {
+	if str == "" || delimiter == "" {
+		return nil
+	}
 	return Split(str, delimiter)
 }
 
-// Implode joins array elements `pieces` with a string `glue`.
-// http://php.net/manual/en/function.implode.php
+// Implode PHP风格的字符串连接函数
 func Implode(glue string, pieces []string) string {
+	if len(pieces) == 0 {
+		return ""
+	}
 	return strings.Join(pieces, glue)
 }
 
-// ChunkSplit splits a string into smaller chunks.
-// Can be used to split a string into smaller chunks which is useful for
-// e.g. converting BASE64 string output to match RFC 2045 semantics.
-// It inserts end every chunkLen characters.
-// It considers parameter `body` and `end` as unicode string.
+// ChunkSplit 将字符串分割成小块
 func ChunkSplit(body string, chunkLen int, end string) string {
+	// 参数验证
+	if body == "" {
+		return ""
+	}
+	if chunkLen <= 0 {
+		chunkLen = 76 // 使用默认值
+	}
 	if end == "" {
 		end = "\r\n"
 	}
-	runes, endRunes := []rune(body), []rune(end)
-	l := len(runes)
-	if l <= 1 || l < chunkLen {
+
+	runes := []rune(body)
+	endRunes := []rune(end)
+	runesLen := len(runes)
+
+	if runesLen <= 1 || runesLen < chunkLen {
 		return body + end
 	}
-	ns := make([]rune, 0, len(runes)+len(endRunes))
-	for i := 0; i < l; i += chunkLen {
-		if i+chunkLen > l {
-			ns = append(ns, runes[i:]...)
-		} else {
-			ns = append(ns, runes[i:i+chunkLen]...)
+
+	// 从对象池获取切片
+	ns := runePool.Get().([]rune)
+	// 确保足够容量
+	needed := runesLen + (runesLen/chunkLen+1)*len(endRunes)
+	if cap(ns) < needed {
+		ns = make([]rune, 0, needed)
+	}
+	ns = ns[:0]
+
+	// 分块处理
+	for i := 0; i < runesLen; i += chunkLen {
+		end := i + chunkLen
+		if end > runesLen {
+			end = runesLen
 		}
+		ns = append(ns, runes[i:end]...)
 		ns = append(ns, endRunes...)
 	}
-	return string(ns)
+
+	result := string(ns)
+	// 将切片放回对象池
+	runePool.Put(ns)
+	return result
 }
 
-// Fields returns the words used in a string as slice.
+// Fields 返回字符串中的单词切片
 func Fields(str string) []string {
+	if str == "" {
+		return nil
+	}
 	return strings.Fields(str)
 }

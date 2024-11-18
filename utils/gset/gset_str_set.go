@@ -2,141 +2,83 @@ package gset
 
 import (
 	"bytes"
-	"github.com/sagoo-cloud/nexframe/utils/convert"
-	"github.com/sagoo-cloud/nexframe/utils/gstr"
-	"github.com/sagoo-cloud/nexframe/utils/json"
-	"github.com/sagoo-cloud/nexframe/utils/rwmutex"
+	"encoding/json"
+	"sort"
 	"strings"
+	"sync"
 )
 
-// StrSet is consisted of string items.
+// StrSet 存储不重复的字符串集合
 type StrSet struct {
-	mu   rwmutex.RWMutex
+	mu   sync.RWMutex
 	data map[string]struct{}
+	safe bool
 }
 
-// NewStrSet create and returns a new set, which contains un-repeated items.
-// The parameter `safe` is used to specify whether using set in concurrent-safety,
-// which is false in default.
+// bufferPool 用于复用字符串构建器
+var strBufferPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(make([]byte, 0, 64))
+	},
+}
+
+// NewStrSet 创建一个新的字符串集合
+// safe参数用于指定是否启用并发安全，默认为false
 func NewStrSet(safe ...bool) *StrSet {
 	return &StrSet{
-		mu:   rwmutex.Create(safe...),
-		data: make(map[string]struct{}),
+		data: make(map[string]struct{}, 8), // 预分配初始容量
+		safe: len(safe) > 0 && safe[0],
 	}
 }
 
-// NewStrSetFrom returns a new set from `items`.
+// NewStrSetFrom 从字符串切片创建新的集合
 func NewStrSetFrom(items []string, safe ...bool) *StrSet {
-	m := make(map[string]struct{})
+	m := make(map[string]struct{}, len(items))
 	for _, v := range items {
 		m[v] = struct{}{}
 	}
 	return &StrSet{
-		mu:   rwmutex.Create(safe...),
 		data: m,
+		safe: len(safe) > 0 && safe[0],
 	}
 }
 
-// Iterator iterates the set readonly with given callback function `f`,
-// if `f` returns true then continue iterating; or false to stop.
-func (set *StrSet) Iterator(f func(v string) bool) {
-	for _, k := range set.Slice() {
-		if !f(k) {
-			break
-		}
+// Add 添加一个或多个字符串到集合
+func (set *StrSet) Add(items ...string) {
+	if len(items) == 0 {
+		return
 	}
-}
 
-// Add adds one or multiple items to the set.
-func (set *StrSet) Add(item ...string) {
-	set.mu.Lock()
+	if set.safe {
+		set.mu.Lock()
+		defer set.mu.Unlock()
+	}
+
 	if set.data == nil {
-		set.data = make(map[string]struct{})
+		set.data = make(map[string]struct{}, len(items))
 	}
-	for _, v := range item {
+	for _, v := range items {
 		set.data[v] = struct{}{}
 	}
-	set.mu.Unlock()
 }
 
-// AddIfNotExist checks whether item exists in the set,
-// it adds the item to set and returns true if it does not exist in the set,
-// or else it does nothing and returns false.
-func (set *StrSet) AddIfNotExist(item string) bool {
-	if !set.Contains(item) {
-		set.mu.Lock()
-		defer set.mu.Unlock()
-		if set.data == nil {
-			set.data = make(map[string]struct{})
-		}
-		if _, ok := set.data[item]; !ok {
-			set.data[item] = struct{}{}
-			return true
-		}
-	}
-	return false
-}
-
-// AddIfNotExistFunc checks whether item exists in the set,
-// it adds the item to set and returns true if it does not exists in the set and
-// function `f` returns true, or else it does nothing and returns false.
-//
-// Note that, the function `f` is executed without writing lock.
-func (set *StrSet) AddIfNotExistFunc(item string, f func() bool) bool {
-	if !set.Contains(item) {
-		if f() {
-			set.mu.Lock()
-			defer set.mu.Unlock()
-			if set.data == nil {
-				set.data = make(map[string]struct{})
-			}
-			if _, ok := set.data[item]; !ok {
-				set.data[item] = struct{}{}
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// AddIfNotExistFuncLock checks whether item exists in the set,
-// it adds the item to set and returns true if it does not exists in the set and
-// function `f` returns true, or else it does nothing and returns false.
-//
-// Note that, the function `f` is executed without writing lock.
-func (set *StrSet) AddIfNotExistFuncLock(item string, f func() bool) bool {
-	if !set.Contains(item) {
-		set.mu.Lock()
-		defer set.mu.Unlock()
-		if set.data == nil {
-			set.data = make(map[string]struct{})
-		}
-		if f() {
-			if _, ok := set.data[item]; !ok {
-				set.data[item] = struct{}{}
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Contains checks whether the set contains `item`.
+// Contains 检查集合是否包含指定字符串
 func (set *StrSet) Contains(item string) bool {
-	var ok bool
-	set.mu.RLock()
-	if set.data != nil {
-		_, ok = set.data[item]
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
 	}
-	set.mu.RUnlock()
-	return ok
+	_, exists := set.data[item]
+	return exists
 }
 
-// ContainsI checks whether a value exists in the set with case-insensitively.
-// Note that it internally iterates the whole set to do the comparison with case-insensitively.
+// ContainsI 检查集合是否包含指定字符串(不区分大小写)
 func (set *StrSet) ContainsI(item string) bool {
-	set.mu.RLock()
-	defer set.mu.RUnlock()
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
+	}
+
 	for k := range set.data {
 		if strings.EqualFold(k, item) {
 			return true
@@ -145,366 +87,242 @@ func (set *StrSet) ContainsI(item string) bool {
 	return false
 }
 
-// Remove deletes `item` from set.
-func (set *StrSet) Remove(item string) {
-	set.mu.Lock()
-	if set.data != nil {
+// Remove 从集合中移除指定字符串
+func (set *StrSet) Remove(items ...string) {
+	if len(items) == 0 {
+		return
+	}
+
+	if set.safe {
+		set.mu.Lock()
+		defer set.mu.Unlock()
+	}
+
+	for _, item := range items {
 		delete(set.data, item)
 	}
-	set.mu.Unlock()
 }
 
-// Size returns the size of the set.
+// Size 返回集合大小
 func (set *StrSet) Size() int {
-	set.mu.RLock()
-	l := len(set.data)
-	set.mu.RUnlock()
-	return l
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
+	}
+	return len(set.data)
 }
 
-// Clear deletes all items of the set.
+// Clear 清空集合
 func (set *StrSet) Clear() {
-	set.mu.Lock()
+	if set.safe {
+		set.mu.Lock()
+		defer set.mu.Unlock()
+	}
 	set.data = make(map[string]struct{})
-	set.mu.Unlock()
 }
 
-// Slice returns the an of items of the set as slice.
+// Slice 返回包含所有元素的有序切片
 func (set *StrSet) Slice() []string {
-	set.mu.RLock()
-	var (
-		i   = 0
-		ret = make([]string, len(set.data))
-	)
-	for item := range set.data {
-		ret[i] = item
-		i++
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
 	}
 
-	set.mu.RUnlock()
-	return ret
-}
-
-// Join joins items with a string `glue`.
-func (set *StrSet) Join(glue string) string {
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	if len(set.data) == 0 {
-		return ""
-	}
-	var (
-		l      = len(set.data)
-		i      = 0
-		buffer = bytes.NewBuffer(nil)
-	)
+	slice := make([]string, 0, len(set.data))
 	for k := range set.data {
-		buffer.WriteString(k)
-		if i != l-1 {
-			buffer.WriteString(glue)
-		}
-		i++
+		slice = append(slice, k)
 	}
-	return buffer.String()
+	sort.Strings(slice) // 保证输出顺序一致
+	return slice
 }
 
-// String returns items as a string, which implements like json.Marshal does.
+// String 返回集合的字符串表示
 func (set *StrSet) String() string {
 	if set == nil {
-		return ""
+		return "[]"
 	}
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	var (
-		l      = len(set.data)
-		i      = 0
-		buffer = bytes.NewBuffer(nil)
-	)
-	buffer.WriteByte('[')
+
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
+	}
+
+	// 获取缓存的buffer
+	buf := strBufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		strBufferPool.Put(buf)
+	}()
+
+	buf.WriteByte('[')
+
+	// 获取排序后的切片以保证输出顺序一致
+	items := make([]string, 0, len(set.data))
 	for k := range set.data {
-		buffer.WriteString(`"` + gstr.QuoteMeta(k, `"\`) + `"`)
-		if i != l-1 {
-			buffer.WriteByte(',')
+		items = append(items, k)
+	}
+	sort.Strings(items)
+
+	for i, v := range items {
+		if i > 0 {
+			buf.WriteByte(',')
 		}
-		i++
+		buf.WriteByte('"')
+		buf.WriteString(escapeString(v))
+		buf.WriteByte('"')
 	}
-	buffer.WriteByte(']')
-	return buffer.String()
+
+	buf.WriteByte(']')
+	return buf.String()
 }
 
-// LockFunc locks writing with callback function `f`.
-func (set *StrSet) LockFunc(f func(m map[string]struct{})) {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	f(set.data)
-}
-
-// RLockFunc locks reading with callback function `f`.
-func (set *StrSet) RLockFunc(f func(m map[string]struct{})) {
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	f(set.data)
-}
-
-// Equal checks whether the two sets equal.
-func (set *StrSet) Equal(other *StrSet) bool {
-	if set == other {
-		return true
-	}
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	other.mu.RLock()
-	defer other.mu.RUnlock()
-	if len(set.data) != len(other.data) {
-		return false
-	}
-	for key := range set.data {
-		if _, ok := other.data[key]; !ok {
-			return false
+// escapeString 转义字符串中的特殊字符
+func escapeString(s string) string {
+	var buf bytes.Buffer
+	for _, c := range s {
+		switch c {
+		case '\\', '"':
+			buf.WriteByte('\\')
+			buf.WriteRune(c)
+		case '\n':
+			buf.WriteString("\\n")
+		case '\r':
+			buf.WriteString("\\r")
+		case '\t':
+			buf.WriteString("\\t")
+		default:
+			buf.WriteRune(c)
 		}
 	}
-	return true
+	return buf.String()
 }
 
-// IsSubsetOf checks whether the current set is a sub-set of `other`.
-func (set *StrSet) IsSubsetOf(other *StrSet) bool {
-	if set == other {
-		return true
-	}
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	other.mu.RLock()
-	defer other.mu.RUnlock()
-	for key := range set.data {
-		if _, ok := other.data[key]; !ok {
-			return false
-		}
-	}
-	return true
-}
+// Union 返回与其他集合的并集
+func (set *StrSet) Union(others ...*StrSet) *StrSet {
+	newSet := NewStrSet(set.safe)
 
-// Union returns a new set which is the union of `set` and `other`.
-// Which means, all the items in `newSet` are in `set` or in `other`.
-func (set *StrSet) Union(others ...*StrSet) (newSet *StrSet) {
-	newSet = NewStrSet()
-	set.mu.RLock()
-	defer set.mu.RUnlock()
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
+	}
+
+	for k := range set.data {
+		newSet.data[k] = struct{}{}
+	}
+
 	for _, other := range others {
-		if set != other {
-			other.mu.RLock()
-		}
-		for k, v := range set.data {
-			newSet.data[k] = v
-		}
-		if set != other {
-			for k, v := range other.data {
-				newSet.data[k] = v
-			}
-		}
-		if set != other {
-			other.mu.RUnlock()
-		}
-	}
-
-	return
-}
-
-// Diff returns a new set which is the difference set from `set` to `other`.
-// Which means, all the items in `newSet` are in `set` but not in `other`.
-func (set *StrSet) Diff(others ...*StrSet) (newSet *StrSet) {
-	newSet = NewStrSet()
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	for _, other := range others {
-		if set == other {
+		if other == nil {
 			continue
 		}
-		other.mu.RLock()
-		for k, v := range set.data {
+		if other.safe {
+			other.mu.RLock()
+		}
+		for k := range other.data {
+			newSet.data[k] = struct{}{}
+		}
+		if other.safe {
+			other.mu.RUnlock()
+		}
+	}
+
+	return newSet
+}
+
+// Intersect 返回与其他集合的交集
+func (set *StrSet) Intersect(others ...*StrSet) *StrSet {
+	newSet := NewStrSet(set.safe)
+	if len(others) == 0 {
+		return newSet
+	}
+
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
+	}
+
+	for k := range set.data {
+		isInAll := true
+		for _, other := range others {
+			if other == nil {
+				isInAll = false
+				break
+			}
+			if other.safe {
+				other.mu.RLock()
+			}
 			if _, ok := other.data[k]; !ok {
-				newSet.data[k] = v
+				if other.safe {
+					other.mu.RUnlock()
+				}
+				isInAll = false
+				break
+			}
+			if other.safe {
+				other.mu.RUnlock()
 			}
 		}
-		other.mu.RUnlock()
-	}
-	return
-}
-
-// Intersect returns a new set which is the intersection from `set` to `other`.
-// Which means, all the items in `newSet` are in `set` and also in `other`.
-func (set *StrSet) Intersect(others ...*StrSet) (newSet *StrSet) {
-	newSet = NewStrSet()
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	for _, other := range others {
-		if set != other {
-			other.mu.RLock()
-		}
-		for k, v := range set.data {
-			if _, ok := other.data[k]; ok {
-				newSet.data[k] = v
-			}
-		}
-		if set != other {
-			other.mu.RUnlock()
+		if isInAll {
+			newSet.data[k] = struct{}{}
 		}
 	}
-	return
+
+	return newSet
 }
 
-// Complement returns a new set which is the complement from `set` to `full`.
-// Which means, all the items in `newSet` are in `full` and not in `set`.
-//
-// It returns the difference between `full` and `set`
-// if the given set `full` is not the full set of `set`.
-func (set *StrSet) Complement(full *StrSet) (newSet *StrSet) {
-	newSet = NewStrSet()
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	if set != full {
-		full.mu.RLock()
-		defer full.mu.RUnlock()
-	}
-	for k, v := range full.data {
-		if _, ok := set.data[k]; !ok {
-			newSet.data[k] = v
-		}
-	}
-	return
-}
-
-// Merge adds items from `others` sets into `set`.
-func (set *StrSet) Merge(others ...*StrSet) *StrSet {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	for _, other := range others {
-		if set != other {
-			other.mu.RLock()
-		}
-		for k, v := range other.data {
-			set.data[k] = v
-		}
-		if set != other {
-			other.mu.RUnlock()
-		}
-	}
-	return set
-}
-
-// Sum sums items.
-// Note: The items should be converted to int type,
-// or you'd get a result that you unexpected.
-func (set *StrSet) Sum() (sum int) {
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	for k := range set.data {
-		sum += convert.Int(k)
-	}
-	return
-}
-
-// Pop randomly pops an item from set.
-func (set *StrSet) Pop() string {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	for k := range set.data {
-		delete(set.data, k)
-		return k
-	}
-	return ""
-}
-
-// Pops randomly pops `size` items from set.
-// It returns all items if size == -1.
-func (set *StrSet) Pops(size int) []string {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	if size > len(set.data) || size == -1 {
-		size = len(set.data)
-	}
-	if size <= 0 {
-		return nil
-	}
-	index := 0
-	array := make([]string, size)
-	for k := range set.data {
-		delete(set.data, k)
-		array[index] = k
-		index++
-		if index == size {
-			break
-		}
-	}
-	return array
-}
-
-// Walk applies a user supplied function `f` to every item of set.
-func (set *StrSet) Walk(f func(item string) string) *StrSet {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	m := make(map[string]struct{}, len(set.data))
-	for k, v := range set.data {
-		m[f(k)] = v
-	}
-	set.data = m
-	return set
-}
-
-// MarshalJSON implements the interface MarshalJSON for json.Marshal.
+// MarshalJSON 实现 json.Marshaler 接口
 func (set *StrSet) MarshalJSON() ([]byte, error) {
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
+	}
 	return json.Marshal(set.Slice())
 }
 
-// UnmarshalJSON implements the interface UnmarshalJSON for json.Unmarshal.
-func (set *StrSet) UnmarshalJSON(b []byte) error {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	if set.data == nil {
-		set.data = make(map[string]struct{})
+// UnmarshalJSON 实现 json.Unmarshaler 接口
+func (set *StrSet) UnmarshalJSON(data []byte) error {
+	if set.safe {
+		set.mu.Lock()
+		defer set.mu.Unlock()
 	}
-	var array []string
-	if err := json.UnmarshalUseNumber(b, &array); err != nil {
+
+	var items []string
+	if err := json.Unmarshal(data, &items); err != nil {
 		return err
 	}
-	for _, v := range array {
-		set.data[v] = struct{}{}
+
+	if set.data == nil {
+		set.data = make(map[string]struct{}, len(items))
+	}
+
+	for _, item := range items {
+		set.data[item] = struct{}{}
 	}
 	return nil
 }
 
-// UnmarshalValue is an interface implement which sets any type of value for set.
-func (set *StrSet) UnmarshalValue(value interface{}) (err error) {
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	if set.data == nil {
-		set.data = make(map[string]struct{})
-	}
-	var array []string
-	switch value.(type) {
-	case string, []byte:
-		err = json.UnmarshalUseNumber(convert.Bytes(value), &array)
-	default:
-		array = convert.SliceStr(value)
-	}
-	for _, v := range array {
-		set.data[v] = struct{}{}
-	}
-	return
-}
-
-// DeepCopy implements interface for deep copy of current type.
-func (set *StrSet) DeepCopy() interface{} {
+// Iterator 使用回调函数只读遍历集合
+// 如果回调函数返回false则停止遍历
+func (set *StrSet) Iterator(f func(v string) bool) {
 	if set == nil {
-		return nil
+		return
 	}
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	var (
-		slice = make([]string, len(set.data))
-		index = 0
-	)
-	for k := range set.data {
-		slice[index] = k
-		index++
+
+	if set.safe {
+		set.mu.RLock()
+		defer set.mu.RUnlock()
 	}
-	return NewStrSetFrom(slice, set.mu.IsSafe())
+
+	// 为了保证遍历顺序稳定，先获取已排序的切片
+	items := make([]string, 0, len(set.data))
+	for item := range set.data {
+		items = append(items, item)
+	}
+	sort.Strings(items)
+
+	// 遍历排序后的切片
+	for _, item := range items {
+		if !f(item) {
+			break
+		}
+	}
 }

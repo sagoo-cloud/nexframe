@@ -1,222 +1,264 @@
-// Package gstructs provides functions for struct information retrieving.
+// Package gstructs 提供结构体信息检索的功能
 package gstructs
 
 import (
-	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 	"reflect"
+	"sync"
+	"sync/atomic"
+
+	"github.com/sagoo-cloud/nexframe/utils/errors/gcode"
+	"github.com/sagoo-cloud/nexframe/utils/errors/gerror"
 )
 
-// Type wraps reflect.Type for additional features.
+// 全局变量，用于控制并发
+var (
+	activeProcesses int64         // 当前活跃的处理数
+	maxProcesses    = int64(1000) // 最大并发处理数
+)
+
+// 结构体缓存
+var structCache = struct {
+	sync.RWMutex
+	m map[reflect.Type]*Type
+}{
+	m: make(map[reflect.Type]*Type),
+}
+
+// Type 包装reflect.Type提供额外功能
 type Type struct {
 	reflect.Type
 }
 
-// Field contains information of a struct field .
+// Field 包含结构体字段的信息
 type Field struct {
-	Value reflect.Value       // The underlying value of the field.
-	Field reflect.StructField // The underlying field of the field.
-
-	// Retrieved tag name. It depends TagValue.
-	TagName string
-
-	// Retrieved tag value.
-	// There might be more than one tags in the field,
-	// but only one can be retrieved according to calling function rules.
-	TagValue string
+	Value    reflect.Value       // 字段的底层值
+	Field    reflect.StructField // 字段的底层字段信息
+	TagName  string              // 检索到的标签名
+	TagValue string              // 检索到的标签值
 }
 
-// FieldsInput is the input parameter struct type for function Fields.
+// FieldsInput 定义Fields函数的输入参数
 type FieldsInput struct {
-	// Pointer should be type of struct/*struct.
-	// TODO this attribute name is not suitable, which would make confuse.
-	Pointer interface{}
-
-	// RecursiveOption specifies the way retrieving the fields recursively if the attribute
-	// is an embedded struct. It is RecursiveOptionNone in default.
-	RecursiveOption RecursiveOption
+	Pointer         interface{}     // 应该是结构体指针
+	RecursiveOption RecursiveOption // 递归选项
 }
 
-// FieldMapInput is the input parameter struct type for function FieldMap.
+// FieldMapInput 定义FieldMap函数的输入参数
 type FieldMapInput struct {
-	// Pointer should be type of struct/*struct.
-	// TODO this attribute name is not suitable, which would make confuse.
-	Pointer interface{}
-
-	// PriorityTagArray specifies the priority tag array for retrieving from high to low.
-	// If it's given `nil`, it returns map[name]Field, of which the `name` is attribute name.
+	Pointer          interface{}
 	PriorityTagArray []string
-
-	// RecursiveOption specifies the way retrieving the fields recursively if the attribute
-	// is an embedded struct. It is RecursiveOptionNone in default.
-	RecursiveOption RecursiveOption
+	RecursiveOption  RecursiveOption
 }
 
+// RecursiveOption 定义递归选项
 type RecursiveOption int
 
 const (
-	RecursiveOptionNone          RecursiveOption = iota // No recursively retrieving fields as map if the field is an embedded struct.
-	RecursiveOptionEmbedded                             // Recursively retrieving fields as map if the field is an embedded struct.
-	RecursiveOptionEmbeddedNoTag                        // Recursively retrieving fields as map if the field is an embedded struct and the field has no tag.
+	RecursiveOptionNone RecursiveOption = iota
+	RecursiveOptionEmbedded
+	RecursiveOptionEmbeddedNoTag
 )
 
-// Fields retrieves and returns the fields of `pointer` as slice.
+// tryAcquireProcess 尝试获取处理资源
+func tryAcquireProcess() bool {
+	return atomic.AddInt64(&activeProcesses, 1) <= maxProcesses
+}
+
+// releaseProcess 释放处理资源
+func releaseProcess() {
+	atomic.AddInt64(&activeProcesses, -1)
+}
+
+// Fields 获取结构体的字段信息
 func Fields(in FieldsInput) ([]Field, error) {
-	var (
-		ok                   bool
-		fieldFilterMap       = make(map[string]struct{})
-		retrievedFields      = make([]Field, 0)
-		currentLevelFieldMap = make(map[string]Field)
-		rangeFields, err     = getFieldValues(in.Pointer)
-	)
+	if !tryAcquireProcess() {
+		return nil, gerror.New("exceeded maximum concurrent processes")
+	}
+	defer releaseProcess()
+
+	if in.Pointer == nil {
+		return nil, gerror.New("input pointer is nil")
+	}
+
+	rangeFields, err := getFieldValues(in.Pointer)
 	if err != nil {
 		return nil, err
 	}
 
-	for index := 0; index < len(rangeFields); index++ {
-		field := rangeFields[index]
+	fieldFilterMap := make(map[string]struct{}, len(rangeFields))
+	retrievedFields := make([]Field, 0, len(rangeFields))
+	currentLevelFieldMap := make(map[string]Field, len(rangeFields))
+
+	for _, field := range rangeFields {
 		currentLevelFieldMap[field.Name()] = field
 	}
 
-	for index := 0; index < len(rangeFields); index++ {
-		field := rangeFields[index]
-		if _, ok = fieldFilterMap[field.Name()]; ok {
+	for _, field := range rangeFields {
+		if !field.Value.IsValid() {
 			continue
 		}
-		if field.IsEmbedded() {
-			if in.RecursiveOption != RecursiveOptionNone {
-				switch in.RecursiveOption {
-				case RecursiveOptionEmbeddedNoTag:
-					if field.TagStr() != "" {
-						break
-					}
-					fallthrough
 
-				case RecursiveOptionEmbedded:
-					structFields, err := Fields(FieldsInput{
-						Pointer:         field.Value,
-						RecursiveOption: in.RecursiveOption,
-					})
-					if err != nil {
-						return nil, err
-					}
-					// The current level fields can overwrite the sub-struct fields with the same name.
-					for i := 0; i < len(structFields); i++ {
-						var (
-							structField = structFields[i]
-							fieldName   = structField.Name()
-						)
-						if _, ok = fieldFilterMap[fieldName]; ok {
-							continue
-						}
-						fieldFilterMap[fieldName] = struct{}{}
-						if v, ok := currentLevelFieldMap[fieldName]; !ok {
-							retrievedFields = append(retrievedFields, structField)
-						} else {
-							retrievedFields = append(retrievedFields, v)
-						}
-					}
-					continue
-				default:
-				}
+		if _, ok := fieldFilterMap[field.Name()]; ok {
+			continue
+		}
+
+		if field.IsEmbedded() {
+			if err := processEmbeddedField(field, in.RecursiveOption, fieldFilterMap, currentLevelFieldMap, &retrievedFields); err != nil {
+				return nil, err
 			}
 			continue
 		}
+
 		fieldFilterMap[field.Name()] = struct{}{}
 		retrievedFields = append(retrievedFields, field)
 	}
+
 	return retrievedFields, nil
 }
 
-// FieldMap retrieves and returns struct field as map[name/tag]Field from `pointer`.
-//
-// The parameter `pointer` should be type of struct/*struct.
-//
-// The parameter `priority` specifies the priority tag array for retrieving from high to low.
-// If it's given `nil`, it returns map[name]Field, of which the `name` is attribute name.
-//
-// The parameter `recursive` specifies whether retrieving the fields recursively if the attribute
-// is an embedded struct.
-//
-// Note that it only retrieves the exported attributes with first letter upper-case from struct.
+// processEmbeddedField 处理嵌入字段
+func processEmbeddedField(
+	field Field,
+	recursiveOption RecursiveOption,
+	fieldFilterMap map[string]struct{},
+	currentLevelFieldMap map[string]Field,
+	retrievedFields *[]Field,
+) error {
+	if recursiveOption == RecursiveOptionNone {
+		return nil
+	}
+
+	switch recursiveOption {
+	case RecursiveOptionEmbeddedNoTag:
+		if field.TagStr() != "" {
+			*retrievedFields = append(*retrievedFields, field)
+			return nil
+		}
+		fallthrough
+
+	case RecursiveOptionEmbedded:
+		structFields, err := Fields(FieldsInput{
+			Pointer:         field.Value,
+			RecursiveOption: recursiveOption,
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, structField := range structFields {
+			fieldName := structField.Name()
+			if _, ok := fieldFilterMap[fieldName]; ok {
+				continue
+			}
+			fieldFilterMap[fieldName] = struct{}{}
+
+			if v, ok := currentLevelFieldMap[fieldName]; !ok {
+				*retrievedFields = append(*retrievedFields, structField)
+			} else {
+				*retrievedFields = append(*retrievedFields, v)
+			}
+		}
+	}
+
+	return nil
+}
+
+// FieldMap 将结构体字段信息转换为map
 func FieldMap(in FieldMapInput) (map[string]Field, error) {
+	if !tryAcquireProcess() {
+		return nil, gerror.New("exceeded maximum concurrent processes")
+	}
+	defer releaseProcess()
+
 	fields, err := getFieldValues(in.Pointer)
 	if err != nil {
 		return nil, err
 	}
-	var (
-		tagValue string
-		mapField = make(map[string]Field)
-	)
+
+	mapField := make(map[string]Field, len(fields))
+
 	for _, field := range fields {
-		// Only retrieve exported attributes.
 		if !field.IsExported() {
 			continue
 		}
-		tagValue = ""
+
+		tagValue := ""
 		for _, p := range in.PriorityTagArray {
 			tagValue = field.Tag(p)
 			if tagValue != "" && tagValue != "-" {
 				break
 			}
 		}
+
 		tempField := field
 		tempField.TagValue = tagValue
+
 		if tagValue != "" {
 			mapField[tagValue] = tempField
-		} else {
-			if in.RecursiveOption != RecursiveOptionNone && field.IsEmbedded() {
-				switch in.RecursiveOption {
-				case RecursiveOptionEmbeddedNoTag:
-					if field.TagStr() != "" {
-						mapField[field.Name()] = tempField
-						break
-					}
-					fallthrough
-
-				case RecursiveOptionEmbedded:
-					m, err := FieldMap(FieldMapInput{
-						Pointer:          field.Value,
-						PriorityTagArray: in.PriorityTagArray,
-						RecursiveOption:  in.RecursiveOption,
-					})
-					if err != nil {
-						return nil, err
-					}
-					for k, v := range m {
-						if _, ok := mapField[k]; !ok {
-							tempV := v
-							mapField[k] = tempV
-						}
-					}
-				default:
-				}
-			} else {
-				mapField[field.Name()] = tempField
+		} else if in.RecursiveOption != RecursiveOptionNone && field.IsEmbedded() {
+			if err := processEmbeddedMap(&tempField, in, mapField); err != nil {
+				return nil, err
 			}
+		} else {
+			mapField[field.Name()] = tempField
 		}
 	}
+
 	return mapField, nil
 }
 
-// StructType retrieves and returns the struct Type of specified struct/*struct.
-// The parameter `object` should be either type of struct/*struct/[]struct/[]*struct.
-func StructType(object interface{}) (*Type, error) {
+// processEmbeddedMap 处理嵌入字段的map转换
+func processEmbeddedMap(field *Field, in FieldMapInput, mapField map[string]Field) error {
+	switch in.RecursiveOption {
+	case RecursiveOptionEmbeddedNoTag:
+		if field.TagStr() != "" {
+			mapField[field.Name()] = *field
+			return nil
+		}
+		fallthrough
+
+	case RecursiveOptionEmbedded:
+		m, err := FieldMap(FieldMapInput{
+			Pointer:          field.Value,
+			PriorityTagArray: in.PriorityTagArray,
+			RecursiveOption:  in.RecursiveOption,
+		})
+		if err != nil {
+			return err
+		}
+		for k, v := range m {
+			if _, ok := mapField[k]; !ok {
+				mapField[k] = v
+			}
+		}
+	}
+	return nil
+}
+
+// getFieldValues 获取结构体的字段值
+func getFieldValues(structObject interface{}) ([]Field, error) {
+	if structObject == nil {
+		return nil, gerror.New("input struct object is nil")
+	}
+
 	var (
 		reflectValue reflect.Value
 		reflectKind  reflect.Kind
-		reflectType  reflect.Type
 	)
-	if rv, ok := object.(reflect.Value); ok {
-		reflectValue = rv
+
+	if v, ok := structObject.(reflect.Value); ok {
+		reflectValue = v
+		reflectKind = reflectValue.Kind()
 	} else {
-		reflectValue = reflect.ValueOf(object)
+		reflectValue = reflect.ValueOf(structObject)
+		reflectKind = reflectValue.Kind()
 	}
-	reflectKind = reflectValue.Kind()
+
+	// 处理指针和数组/切片类型
 	for {
 		switch reflectKind {
 		case reflect.Ptr:
 			if !reflectValue.IsValid() || reflectValue.IsNil() {
-				// If pointer is type of *struct and nil, then automatically create a temporary struct.
 				reflectValue = reflect.New(reflectValue.Type().Elem()).Elem()
 				reflectKind = reflectValue.Kind()
 			} else {
@@ -235,13 +277,96 @@ func StructType(object interface{}) (*Type, error) {
 
 exitLoop:
 	if reflectKind != reflect.Struct {
-		return nil, gerror.Newf(
-			`invalid object kind "%s", kind of "struct" is required`,
+		return nil, gerror.NewCodef(
+			gcode.CodeInvalidParameter,
+			"invalid object kind: %s, struct required",
 			reflectKind,
 		)
 	}
-	reflectType = reflectValue.Type()
-	return &Type{
-		Type: reflectType,
-	}, nil
+
+	var (
+		structType = reflectValue.Type()
+		length     = reflectValue.NumField()
+		fields     = make([]Field, length)
+	)
+
+	for i := 0; i < length; i++ {
+		fields[i] = Field{
+			Value: reflectValue.Field(i),
+			Field: structType.Field(i),
+		}
+	}
+
+	return fields, nil
+}
+
+// StructType 获取结构体类型信息
+func StructType(object interface{}) (*Type, error) {
+	if object == nil {
+		return nil, gerror.New("input object is nil")
+	}
+
+	var (
+		reflectValue reflect.Value
+		reflectKind  reflect.Kind
+	)
+
+	// 检查缓存
+	if t, ok := object.(*Type); ok {
+		return t, nil
+	}
+
+	if rv, ok := object.(reflect.Value); ok {
+		reflectValue = rv
+	} else {
+		reflectValue = reflect.ValueOf(object)
+	}
+	reflectKind = reflectValue.Kind()
+
+	// 处理指针和数组/切片类型
+	for {
+		switch reflectKind {
+		case reflect.Ptr:
+			if !reflectValue.IsValid() || reflectValue.IsNil() {
+				reflectValue = reflect.New(reflectValue.Type().Elem()).Elem()
+				reflectKind = reflectValue.Kind()
+			} else {
+				reflectValue = reflectValue.Elem()
+				reflectKind = reflectValue.Kind()
+			}
+
+		case reflect.Array, reflect.Slice:
+			reflectValue = reflect.New(reflectValue.Type().Elem()).Elem()
+			reflectKind = reflectValue.Kind()
+
+		default:
+			goto exitLoop
+		}
+	}
+
+exitLoop:
+	if reflectKind != reflect.Struct {
+		return nil, gerror.NewCodef(
+			gcode.CodeInvalidParameter,
+			"invalid object kind: %s, struct required",
+			reflectKind,
+		)
+	}
+
+	// 使用缓存
+	structCache.RLock()
+	if t, ok := structCache.m[reflectValue.Type()]; ok {
+		structCache.RUnlock()
+		return t, nil
+	}
+	structCache.RUnlock()
+
+	t := &Type{Type: reflectValue.Type()}
+
+	// 更新缓存
+	structCache.Lock()
+	structCache.m[reflectValue.Type()] = t
+	structCache.Unlock()
+
+	return t, nil
 }
