@@ -326,3 +326,65 @@ func (set *StrSet) Iterator(f func(v string) bool) {
 		}
 	}
 }
+
+// AddIfNotExist 检查集合中是否存在项目，
+// 它将该项添加到set中，如果该项在set中不存在，则返回true，
+// 否则它什么也不做，返回false。
+func (set *StrSet) AddIfNotExist(item string) bool {
+	if !set.Contains(item) {
+		set.mu.Lock()
+		defer set.mu.Unlock()
+		if set.data == nil {
+			set.data = make(map[string]struct{})
+		}
+		if _, ok := set.data[item]; !ok {
+			set.data[item] = struct{}{}
+			return true
+		}
+	}
+	return false
+}
+
+// AddIfNotExistFunc 检查集合中是否存在项目，
+// 它将该项添加到set中，如果该项在set中不存在，则返回true，并且
+// 函数`f`返回true，否则它什么也不做，返回false。
+//
+// 请注意，函数“f”是在没有写锁的情况下执行的。
+func (set *StrSet) AddIfNotExistFunc(item string, f func() bool) bool {
+	if !set.Contains(item) {
+		if f() {
+			set.mu.Lock()
+			defer set.mu.Unlock()
+			if set.data == nil {
+				set.data = make(map[string]struct{})
+			}
+			if _, ok := set.data[item]; !ok {
+				set.data[item] = struct{}{}
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// AddIfNotExistFuncLock 检查集合中是否存在项目，
+// 它将该项添加到set中，如果该项在set中不存在，则返回true，并且
+// 函数`f`返回true，否则它什么也不做，返回false。
+//
+// 请注意，函数“f”是在没有写锁的情况下执行的。
+func (set *StrSet) AddIfNotExistFuncLock(item string, f func() bool) bool {
+	if !set.Contains(item) {
+		set.mu.Lock()
+		defer set.mu.Unlock()
+		if set.data == nil {
+			set.data = make(map[string]struct{})
+		}
+		if f() {
+			if _, ok := set.data[item]; !ok {
+				set.data[item] = struct{}{}
+				return true
+			}
+		}
+	}
+	return false
+}
