@@ -54,12 +54,13 @@ type authKey struct{}
 // AuthClaims 定义JWT Claims接口
 type AuthClaims interface {
 	jwt.Claims
+	GetUserID() int32
 	GetUsername() string
 }
 
 // TokenClaims 实现AuthClaims接口
 type TokenClaims struct {
-	ID        string `json:"id"`
+	ID        int32  `json:"id"`
 	Username  string `json:"username"`
 	TokenType string `json:"token_type"`
 	Data      interface{}
@@ -69,6 +70,11 @@ type TokenClaims struct {
 // GetUsername 获取Claims中的用户名
 func (tc *TokenClaims) GetUsername() string {
 	return tc.Username
+}
+
+// GetUserID 获取Claims中的ID
+func (tc *TokenClaims) GetUserID() int32 {
+	return tc.ID
 }
 
 // JwtConfig 定义JWT配置结构体
