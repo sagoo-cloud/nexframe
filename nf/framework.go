@@ -15,6 +15,7 @@ import (
 	"github.com/sagoo-cloud/nexframe/os/file"
 	"github.com/sagoo-cloud/nexframe/utils/convert"
 	"github.com/sagoo-cloud/nexframe/utils/meta"
+	"github.com/sagoo-cloud/nexframe/utils/valid"
 	"go.uber.org/zap"
 	"io"
 	"log"
@@ -416,7 +417,9 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 		}
 
 		// 验证请求
-		if err := g.Validator.Data(req).Run(ctx); err != nil {
+		validator := valid.New()
+		// 使用 Clone() 创建一个新的验证器实例，避免状态污染
+		if err := validator.Data(req).Clone().Run(ctx); err != nil {
 			contracts.JsonExit(w, http.StatusBadRequest, "验证失败: "+err.Error())
 			return
 		}
@@ -534,7 +537,7 @@ func (f *APIFramework) handleMultipartRequest(r *http.Request, dst interface{}) 
 	t := v.Type()
 
 	// 遍历所有字段
-	for i := 0; i < t.NumField(); i++ {
+	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
 
 		// 跳过 Meta 字段
