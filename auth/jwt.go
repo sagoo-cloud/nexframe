@@ -50,6 +50,10 @@ type TokenPair struct {
 }
 
 type authKey struct{}
+type UserInfo struct {
+	ID       int32
+	Username string
+}
 
 // AuthClaims 定义JWT Claims接口
 type AuthClaims interface {
@@ -267,6 +271,7 @@ func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
 
 	// 创建一个新的TokenClaims对象,避免在返回时修改对象池中的对象
 	returnClaims := &TokenClaims{
+		ID:               claims.ID,
 		Username:         claims.Username,
 		TokenType:        claims.TokenType,
 		RegisteredClaims: claims.RegisteredClaims,
@@ -277,15 +282,15 @@ func (jm *jwtMiddleware) parseJwtToken(tokenString string) (AuthClaims, error) {
 }
 
 // GenerateTokenPair 生成访问令牌和刷新令牌
-func (jm *jwtMiddleware) GenerateTokenPair(username string) (*TokenPair, error) {
+func (jm *jwtMiddleware) GenerateTokenPair(user UserInfo) (*TokenPair, error) {
 	// 生成访问令牌
-	accessToken, err := jm.createToken(username, TokenTypeAccess, jm.conf.ExpiresTime)
+	accessToken, err := jm.createToken(user, TokenTypeAccess, jm.conf.ExpiresTime)
 	if err != nil {
 		return nil, err
 	}
 
 	// 生成刷新令牌
-	refreshToken, err := jm.createToken(username, TokenTypeRefresh, jm.conf.RefreshExpiresTime)
+	refreshToken, err := jm.createToken(user, TokenTypeRefresh, jm.conf.RefreshExpiresTime)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +302,7 @@ func (jm *jwtMiddleware) GenerateTokenPair(username string) (*TokenPair, error) 
 }
 
 // createToken 创建JWT令牌,使用对象池优化内存分配
-func (jm *jwtMiddleware) createToken(username, tokenType string, expiration time.Duration) (string, error) {
+func (jm *jwtMiddleware) createToken(user UserInfo, tokenType string, expiration time.Duration) (string, error) {
 	now := time.Now()
 
 	// 从对象池中获取TokenClaims对象
@@ -305,7 +310,8 @@ func (jm *jwtMiddleware) createToken(username, tokenType string, expiration time
 	defer tokenClaimsPool.Put(claims)
 
 	*claims = TokenClaims{
-		Username:  username,
+		ID:        user.ID,
+		Username:  user.Username,
 		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
@@ -344,7 +350,10 @@ func (jm *jwtMiddleware) RefreshToken(refreshToken string) (*TokenPair, error) {
 	}
 
 	// 生成新的访问令牌和刷新令牌
-	return jm.GenerateTokenPair(tokenClaims.Username)
+	return jm.GenerateTokenPair(UserInfo{
+		ID:       tokenClaims.ID,
+		Username: tokenClaims.Username,
+	})
 }
 
 // isExcludedPath 检查请求路径是否在排除路径列表中

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,6 +47,11 @@ func TestMiddleware(t *testing.T) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		user, ok := ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		}
+		log.Print(user.GetUsername(), ":", user.GetUserID())
 		w.Write([]byte("Welcome, " + username))
 	})
 
@@ -54,7 +60,10 @@ func TestMiddleware(t *testing.T) {
 
 	// 测试有效令牌
 	t.Run("ValidToken", func(t *testing.T) {
-		tokenPair, err := middleware.GenerateTokenPair("testuser")
+		tokenPair, err := middleware.GenerateTokenPair(UserInfo{
+			ID:       11,
+			Username: "testuser",
+		})
 		if err != nil {
 			t.Fatalf("生成令牌对失败: %v", err)
 		}
@@ -106,13 +115,17 @@ func TestMiddleware(t *testing.T) {
 			t.Errorf("处理程序返回了错误的状态码: 得到 %v 想要 %v", rr.Code, http.StatusUnauthorized)
 		}
 	})
+
 }
 
 // TestTokenExtraction 测试从不同来源提取令牌的能力
 // 测试检查中间件是否能够正确地从HTTP头、查询参数或cookie中提取令牌
 func TestTokenExtraction(t *testing.T) {
 	middleware, _ := NewJwt()
-	tokenPair, _ := middleware.GenerateTokenPair("testuser")
+	tokenPair, _ := middleware.GenerateTokenPair(UserInfo{
+		ID:       11,
+		Username: "testuser",
+	})
 
 	testCases := []struct {
 		name        string
@@ -222,7 +235,9 @@ func TestRefreshToken(t *testing.T) {
 	middleware, _ := NewJwt()
 	// 测试有效的刷新令牌
 	t.Run("ValidRefreshToken", func(t *testing.T) {
-		tokenPair, _ := middleware.GenerateTokenPair("testuser")
+		tokenPair, _ := middleware.GenerateTokenPair(UserInfo{
+			Username: "testuser",
+		})
 		newTokenPair, err := middleware.RefreshToken(tokenPair.RefreshToken)
 		if err != nil {
 			t.Fatalf("刷新令牌失败: %v", err)
