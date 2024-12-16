@@ -89,7 +89,7 @@ func EnvBool(key string, value ...interface{}) bool {
 	return ret
 }
 func EnvStringSlice(key string, value ...interface{}) []string {
-	if cfg == nil || value == nil {
+	if cfg == nil && value == nil {
 		return []string{}
 	}
 	mode := args.Mode
@@ -99,7 +99,7 @@ func EnvStringSlice(key string, value ...interface{}) []string {
 		ret = cfg.GetStringSlice(modeKey)
 	} else if cfg.IsSet(key) {
 		ret = cfg.GetStringSlice(key)
-	} else {
+	} else if len(value) > 0 {
 		ret = value[0].([]string)
 	}
 	return ret
