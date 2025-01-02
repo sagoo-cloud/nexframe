@@ -418,8 +418,7 @@ func (f *APIFramework) createHandler(def APIDefinition) http.HandlerFunc {
 
 		// 验证请求
 		validator := valid.New()
-		// 使用 Clone() 创建一个新的验证器实例，避免状态污染
-		if err := validator.Data(req).Clone().Run(ctx); err != nil {
+		if err := validator.Data(req).Run(ctx); err != nil {
 			contracts.JsonExit(w, http.StatusBadRequest, "验证失败: "+err.Error())
 			return
 		}

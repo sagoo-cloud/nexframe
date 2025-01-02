@@ -32,6 +32,11 @@ func New() *Validator {
 
 // Run starts validating the given data with rules and messages.
 func (v *Validator) Run(ctx context.Context) error {
+	// 重置验证器状态
+	v.foreach = false
+	v.bail = false
+	v.caseInsensitive = false
+
 	if v.data == nil {
 		return newValidationErrorByStr(
 			internalParamsErrRuleName,
