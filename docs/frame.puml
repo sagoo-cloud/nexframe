@@ -1,0 +1,85 @@
+@startuml NexFrame Framework Architecture
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam padding 2
+skinparam nodesep 10
+skinparam ranksep 20
+
+' 自定义样式
+skinparam component {
+    BackgroundColor<<core>> #E3F2FD
+    BackgroundColor<<infra>> #E8F5E9
+    BackgroundColor<<middleware>> #FFF3E0
+    BackgroundColor<<utils>> #FAFAFA
+    BorderColor #2196F3
+    ArrowColor #2196F3
+}
+
+package "NexFrame Framework" {
+    ' 核心层
+    package "Core" as core {
+        [Framework Entry\n(app.go)]<<core>> as entry
+        component "API Framework"<<core>> as api
+        component "Service Registry"<<core>> as registry
+    }
+
+    ' 基础设施层
+    package "Infrastructure" as infra {
+        [Auth Service]<<infra>> as auth
+        [Config Manager]<<infra>> as config
+        [Database]<<infra>> as db
+        [Session]<<infra>> as session
+    }
+
+    ' 中间件层
+    package "Middleware" as mid {
+        [HTTP Pipeline]<<middleware>> as http
+        [Error Handler]<<middleware>> as error
+        [Logger]<<middleware>> as logger
+    }
+
+    ' 网络层
+    package "Network" as net {
+        [HTTP Server] as server
+        [ServiceWeaver] as weaver
+    }
+
+    ' 工具层
+    package "Utils" as utils {
+        [Common Utils]<<utils>> as common
+        [Validators]<<utils>> as valid
+        [I18n]<<utils>> as i18n
+    }
+
+    ' 运行时
+    package "Runtime" as runtime {
+        [Worker Pool] as pool
+        [OS Operations] as os
+    }
+}
+
+' 核心关系
+entry -down-> api
+api -down-> registry
+registry -down-> auth
+
+' 基础设施关系
+auth -down-> http
+http -down-> server
+server -down-> weaver
+
+' 中间件关系
+http -right-> logger
+http -right-> error
+
+' 工具关系
+api -right-> common
+api -right-> valid
+api -right-> i18n
+
+' 运行时关系
+weaver -down-> pool
+pool -down-> os
+
+@enduml
