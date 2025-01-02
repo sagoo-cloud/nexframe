@@ -74,6 +74,11 @@ func (s *Server) Run() error {
 // runService 运行单个服务
 func (s *Server) runService(name string, srv *service) {
 	defer s.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Printf("服务 %s panic: %v", name, r)
+		}
+	}()
 	ticker := time.NewTicker(srv.freq)
 	defer ticker.Stop()
 

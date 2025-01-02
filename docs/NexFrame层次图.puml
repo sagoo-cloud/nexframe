@@ -1,0 +1,79 @@
+@startuml NexFrame层次图
+
+skinparam {
+    PackageBackgroundColor<<API>> LightBlue
+    PackageBackgroundColor<<Core>> LightGreen
+    PackageBackgroundColor<<Infrastructure>> LightGray
+    PackageBackgroundColor<<Utils>> LightYellow
+}
+
+package "应用层" <<API>> {
+    [HTTP API]
+    [WebSocket API]
+    [RPC API]
+}
+
+package "业务层" <<Core>> {
+    package "认证与授权" {
+        [认证服务]
+        [权限管理]
+        [会话管理]
+    }
+
+    package "任务处理" {
+        [Worker服务]
+        [定时任务]
+        [队列管理]
+    }
+
+    package "数据处理" {
+        [数据聚合]
+        [数据验证]
+        [数据转换]
+    }
+}
+
+package "框架核心" <<Core>> {
+    [路由管理]
+    [中间件]
+    [配置管理]
+    [国际化]
+}
+
+package "基础设施层" <<Infrastructure>> {
+    package "存储" {
+        [Redis适配器]
+        [数据库适配器]
+        [文件存储]
+    }
+
+    package "网络" {
+        [HTTP客户端]
+        [WebSocket]
+        [TCP/UDP]
+    }
+
+    package "系统" {
+        [日志服务]
+        [缓存服务]
+        [信号处理]
+    }
+}
+
+package "工具层" <<Utils>> {
+    [通用工具]
+    [加密解密]
+    [编码转换]
+    [数据结构]
+}
+
+' 定义依赖关系
+应用层 -down-> 业务层
+业务层 -down-> 框架核心
+业务层 -down-> 基础设施层
+框架核心 -down-> 基础设施层
+[框架核心] -down-> [工具层]
+[业务层] -down-> [工具层]
+[基础设施层] -down-> [工具层]
+
+@enduml

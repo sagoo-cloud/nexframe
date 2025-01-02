@@ -1,0 +1,90 @@
+@startuml NexFrame实体关系图
+
+!define table(x) class x << (T,#FFAAAA) >>
+!define interface(x) interface x << (I,#AAAAFF) >>
+
+' 定义实体
+table(APIFramework) {
+  +Config: FileConfig
+  +Router: Router
+  +Middleware: []Middleware
+  +NewAPIFramework()
+}
+
+table(Request) {
+  +Id: string
+  +Data: map[string]interface{}
+}
+
+table(Response) {
+  +Ret: int
+  +Code: string
+  +Data: interface{}
+  +Message: string
+}
+
+table(Worker) {
+  +redis: RedisClient
+  +client: asynq.Client
+  +inspector: asynq.Inspector
+  +Error: error
+  +Once()
+  +Cron()
+  +Remove()
+}
+
+table(Payload) {
+  +Group: string
+  +Uid: string
+  +Payload: []byte
+  +String()
+}
+
+table(ProcessConfig) {
+  +Topic: string
+  +ProcessType: string
+}
+
+table(FileConfig) {
+  +MaxFileSize: int64
+  +MaxTotalSize: int64
+  +AllowedTypes: []string
+  +SavePath: string
+  +Fields: map[string]FileField
+}
+
+table(FileField) {
+  +MaxSize: int64
+  +AllowTypes: []string
+  +Required: bool
+}
+
+table(RedisQueue) {
+  +client: RedisClient
+  +Enqueue()
+  +Dequeue()
+  +AckMsg()
+  +BatchEnqueue()
+}
+
+interface(BaseProcess) {
+  +GetTopic()
+  +GetProcessConfig()
+  +Handle()
+  +HandleAggregate()
+}
+
+' 定义关系
+APIFramework "1" -- "*" Request : 处理
+APIFramework "1" -- "*" Response : 返回
+APIFramework "1" -- "1" FileConfig : 配置
+FileConfig "1" -- "*" FileField : 包含
+
+Worker "1" -- "*" Payload : 处理
+Worker "1" -- "1" RedisQueue : 使用
+Worker "1" -- "*" ProcessConfig : 配置
+
+Payload "1" -- "1" ProcessConfig : 关联
+BaseProcess "*" -- "1" ProcessConfig : 实现
+
+@enduml

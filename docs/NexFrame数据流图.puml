@@ -1,0 +1,82 @@
+@startuml NexFrame数据流图
+
+!define ENTITY entity
+!define PROCESS process
+!define DATASTORE database
+!define EXTERNAL_ENTITY actor
+
+' 定义样式
+skinparam componentStyle uml2
+skinparam DatabaseBackgroundColor LightBlue
+skinparam ProcessBackgroundColor LightGreen
+skinparam ActorBackgroundColor White
+
+' 外部实体
+EXTERNAL_ENTITY "客户端" as client
+EXTERNAL_ENTITY "外部服务" as external_service
+
+' 进程
+PROCESS "API网关\n(APIFramework)" as api_gateway #LightGreen
+PROCESS "请求处理器\n(RequestHandler)" as request_handler #LightGreen
+PROCESS "响应生成器\n(ResponseGenerator)" as response_generator #LightGreen
+PROCESS "认证中间件\n(AuthMiddleware)" as auth_middleware #LightYellow
+PROCESS "任务调度器\n(Worker)" as worker #LightGreen
+PROCESS "数据聚合器\n(Aggregator)" as aggregator #LightGreen
+PROCESS "WebSocket管理器\n(SocketManager)" as socket_manager #LightGreen
+
+' 数据存储
+DATASTORE "Redis\n(缓存/队列)" as redis #LightBlue
+DATASTORE "数据库" as database #LightBlue
+DATASTORE "文件存储" as file_storage #LightBlue
+
+' 数据流
+client --> api_gateway: 1.HTTP/WebSocket请求
+api_gateway --> auth_middleware: 2.认证请求
+auth_middleware --> request_handler: 3.已认证请求
+request_handler --> worker: 4.异步任务
+request_handler --> aggregator: 5.数据聚合请求
+worker --> redis: 6.任务入队
+redis --> worker: 7.任务出队
+worker --> external_service: 8.外部服务调用
+aggregator --> database: 9.数据查询
+database --> aggregator: 10.查询结果
+aggregator --> response_generator: 11.聚合数据
+response_generator --> client: 12.API响应
+
+' WebSocket数据流
+client --> socket_manager: 13.WebSocket连接
+socket_manager --> redis: 14.会话存储
+socket_manager --> worker: 15.实时任务
+socket_manager --> client: 16.实时推送
+
+' 文件处理流
+client --> api_gateway: 17.文件上传
+api_gateway --> file_storage: 18.文件存储
+file_storage --> response_generator: 19.存储结果
+
+' 添加注释
+note right of api_gateway
+  处理所有入站请求
+  路由分发
+  请求验证
+end note
+
+note right of worker
+  异步任务处理
+  定时任务
+  重试机制
+end note
+
+note right of aggregator
+  数据聚合
+  数据转换
+  结果缓存
+end note
+
+note right of redis
+  任务队列
+  缓存
+  会话存储
+end note
+
+@enduml

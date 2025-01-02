@@ -1,0 +1,68 @@
+@startuml NexFrame系统架构
+
+skinparam componentStyle uml2
+skinparam component {
+  BackgroundColor<<API>> LightBlue
+  BackgroundColor<<Service>> LightGreen
+  BackgroundColor<<Worker>> LightYellow
+}
+
+package "NexFrame Framework" {
+  [API Framework] <<API>> as api
+  [Worker Service] <<Worker>> as worker
+  [Database Service] as db
+  [Timer Service] as timer
+  [Authentication] as auth
+  [Middleware] as middleware
+  [Utils] as utils
+  database "Redis" as redis
+
+  package "Core Services" {
+    [Session Manager] as session
+    [I18n Service] as i18n
+    [Signal Handler] as signals
+    [Network Service] as net
+  }
+}
+
+cloud "External Services" {
+  [HTTP Services] as http
+}
+
+actor "Client" as client
+
+client --> api
+api --> middleware
+middleware --> auth
+api --> session
+api --> i18n
+
+worker --> redis : 任务队列
+worker --> http : HTTP回调
+
+auth --> db
+session --> db
+
+note right of worker
+  - 支持一次性任务
+  - 支持定时任务
+  - 支持周期性任务
+  - 任务状态管理
+  - 失败重试机制
+end note
+
+note right of api
+  - RESTful API支持
+  - 微服务集成
+  - 服务编排
+  - 错误处理
+end note
+
+note right of middleware
+  - 认证授权
+  - 日志记录
+  - 请求验证
+  - 跨域处理
+end note
+
+@enduml

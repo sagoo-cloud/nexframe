@@ -1,0 +1,76 @@
+@startuml NexFrame Logical Architecture
+
+skinparam backgroundColor white
+skinparam roundcorner 20
+skinparam componentStyle uml2
+
+' 定义样式
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor #78909C
+    ArrowColor #78909C
+    FontColor #37474F
+}
+
+' 应用层
+rectangle "应用层\nApplication Layer" as AL {
+    rectangle "业务接口\nBusiness APIs" as API
+    rectangle "控制器\nControllers" as CTRL
+    rectangle "中间件\nMiddleware Chain" as MID
+}
+
+' 核心层
+rectangle "核心层\nCore Layer" as CL {
+    rectangle "API框架\nAPI Framework" as FRAME
+    rectangle "路由管理\nRoute Manager" as ROUTE
+    rectangle "服务编排\nService Orchestration" as ORCH
+}
+
+' 服务层
+rectangle "服务层\nService Layer" as SL {
+    rectangle "认证服务\nAuth Service" as AUTH
+    rectangle "配置服务\nConfig Service" as CONF
+    rectangle "会话服务\nSession Service" as SESS
+}
+
+' 基础设施层
+rectangle "基础设施层\nInfrastructure Layer" as IL {
+    rectangle "数据访问\nData Access" as DAO
+    rectangle "缓存\nCache" as CACHE
+    rectangle "消息队列\nMessage Queue" as MQ
+}
+
+' 外部接口
+interface "HTTP/HTTPS" as HTTP
+interface "Database" as DB
+interface "Cache" as CS
+interface "Message" as MS
+
+' 连接关系
+HTTP --> API
+API --> MID
+MID --> CTRL
+CTRL --> FRAME
+
+FRAME --> ROUTE
+FRAME --> ORCH
+
+ORCH --> AUTH
+ORCH --> CONF
+ORCH --> SESS
+
+AUTH --> DAO
+CONF --> CACHE
+SESS --> MQ
+
+DAO --> DB
+CACHE --> CS
+MQ --> MS
+
+' 添加说明注释
+note right of AL : 处理HTTP请求\n实现业务逻辑\n权限控制
+note right of CL : 框架核心功能\n服务编排\n路由管理
+note right of SL : 提供基础服务\n处理业务逻辑\n状态管理
+note right of IL : 数据持久化\n缓存管理\n消息处理
+
+@enduml

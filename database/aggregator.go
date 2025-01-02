@@ -151,7 +151,12 @@ func (agt *Aggregator) work() {
 	defer agt.wg.Done()
 
 	batch := agt.pool.Get().([]interface{})
-	defer agt.pool.Put(batch[:0])
+	defer func() {
+		if len(batch) > 0 {
+			batch = batch[:0]
+		}
+		agt.pool.Put(batch)
+	}()
 
 	for {
 		select {
